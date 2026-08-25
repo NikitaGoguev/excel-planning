@@ -1,0 +1,40 @@
+{
+  "name": "quarterplan-excel",
+  "version": "1.0.0",
+  "description": "Quarterly capacity and delivery planning for IT teams in Excel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NikitaGoguev/excel-planning.git"
+  },
+  "keywords": ["excel", "exceljs", "vba", "capacity-planning", "quarterly-planning", "resource-planning"],
+  "private": true,
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "env:check": "node scripts/check_environment.mjs",
+    "audit:deps": "npm audit --omit=dev --audit-level=moderate",
+    "build": "node scripts/check_environment.mjs && node scripts/build_quarter_planning_step1.mjs && node scripts/create_quarter_planning_xlsm.mjs",
+    "build:xlsx": "node scripts/check_environment.mjs && node scripts/build_quarter_planning_step1.mjs",
+    "build:xlsm": "node scripts/check_environment.mjs && node scripts/create_quarter_planning_xlsm.mjs",
+    "build:release": "node scripts/check_environment.mjs && node scripts/build_release.mjs",
+    "normalize": "node scripts/check_environment.mjs && node scripts/normalize_workbook_design.mjs outputs/quarter_planning_step1.xlsx outputs/quarter_planning_step2.xlsm",
+    "sanitize:assets": "node scripts/check_environment.mjs && node scripts/sanitize_workbook_metadata.mjs \"assets/Шаблон Экспресс оценки.xlsx\"",
+    "sync:vba": "node scripts/run_windows_powershell.mjs sync_vba_from_source.ps1",
+    "verify": "node scripts/check_environment.mjs && node scripts/build_quarter_planning_step1.mjs && node scripts/create_quarter_planning_xlsm.mjs && node scripts/verify_static_contracts.mjs",
+    "verify:static": "node scripts/check_environment.mjs && node scripts/verify_static_contracts.mjs",
+    "verify:release": "node scripts/check_environment.mjs && node scripts/build_release.mjs && node scripts/verify_public_release.mjs",
+    "verify:release:excel": "node scripts/run_windows_powershell.mjs verify_release_excel_com.ps1",
+    "verify:excel": "node scripts/run_windows_powershell.mjs verify_all.ps1 -SkipBuild",
+    "preview": "node scripts/run_windows_powershell.mjs render_workbook_previews.ps1",
+    "preview:public": "node scripts/run_windows_powershell.mjs render_public_screenshots.ps1"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "jszip": "3.10.1"
+  },
+  "overrides": {
+    "uuid": "11.1.1"
+  }
+}

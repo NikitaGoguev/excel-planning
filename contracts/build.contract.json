@@ -1,0 +1,28 @@
+{
+  "outputs": {
+    "xlsx": "outputs/quarter_planning_step1.xlsx",
+    "xlsm": "outputs/quarter_planning_step2.xlsm"
+  },
+  "design": {
+    "fontName": "Calibri",
+    "fontSize": 11,
+    "allowFontRecordsWithoutNameAndSize": true,
+    "disallowCustomRowHeights": true
+  },
+  "hiddenFilterButtons": {
+    "tblTeamComposition": [1, 2],
+    "tblTeamMembers": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    "tblHolidays": [1, 2, 3, 4],
+    "tblTaskEstimates": [5, 6, 7, 8, 9, 10, 11],
+    "tblPlanActive": [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+    "tblPlanGrey": [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+    "tblPlanBacklog": [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+  },
+  "package": {
+    "xlsxMustNotContain": ["xl/vbaProject.bin"],
+    "xlsmMustContain": ["xl/vbaProject.bin"],
+    "xlsmContentType": "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+    "workbookCodeName": "ThisWorkbook",
+    "worksheetCodeNames": ["Sheet1", "Sheet2", "Sheet3", "Sheet4", "Sheet5", "Sheet6", "Sheet7"]
+  }
+}

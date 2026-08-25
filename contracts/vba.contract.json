@@ -1,0 +1,81 @@
+{
+  "sources": [
+    "assets/vba/ThisWorkbook_holiday_macro.txt",
+    "assets/vba/QuarterPlanActions_module.txt"
+  ],
+  "requiredPublicMacros": [
+    "RunQuarterPlanReloadBacklog",
+    "RunQuarterPlanRecalculate",
+    "RunQuarterPlanExportBacklog",
+    "RunQuarterPlanExportBacklogPath",
+    "RunQuarterPlanCellAction",
+    "RunQuarterPlanAddAllBacklogToPlan",
+    "RunQuarterPlanRepairActionButtons",
+    "RunTaskEstimateCellAction",
+    "RunTaskEstimateExpressExport",
+    "RunTaskEstimateRepairActionButtons",
+    "RunTaskEstimateImportCsv",
+    "RunTaskEstimateImportCsvPath",
+    "RunTaskEstimateImportXlsx",
+    "RunTaskEstimateImportXlsxPath",
+    "RunTaskEstimateClearAll",
+    "RunTaskEstimateRefresh",
+    "RunTaskEstimateExportXlsx",
+    "RunTaskEstimateExportXlsxPath",
+    "RunTaskEstimateExpressExportPath"
+  ],
+  "forbiddenPatterns": [
+    {
+      "name": "ActiveX dictionary",
+      "pattern": "CreateObject\\s*\\(\\s*\"Scripting\\.Dictionary\"\\s*\\)"
+    },
+    {
+      "name": "CSV FileDialog",
+      "pattern": "\\bFileDialog\\b"
+    },
+    {
+      "name": "CSV QueryTables",
+      "pattern": "\\bQueryTables\\b"
+    },
+    {
+      "name": "CSV OpenText",
+      "pattern": "\\bOpenText\\b"
+    },
+    {
+      "name": "Argument-bearing OnAction assignment",
+      "pattern": "\\.OnAction\\s*=\\s*.*[\"'].*\\(.*\\)"
+    },
+    {
+      "name": "Raw Cyrillic local date format literal",
+      "pattern": "\"ДД-ММ-ГГГГ\""
+    },
+    {
+      "name": "Full tblTeamMembers body write including calculated columns",
+      "pattern": "membersTbl\\.DataBodyRange\\.(?:Value|Value2)\\s*="
+    },
+    {
+      "name": "Team composition vacation formula rewrite incompatible with Excel 2016",
+      "pattern": "\\bWriteTeamMemberVacationDayFormulas\\b"
+    },
+    {
+      "name": "Raw Cyrillic sheet 03 action caption helper literal",
+      "pattern": "TaskEstimateText(?:ClearAll|Refresh|ExportXlsx|ImportXlsx|ExpressExport)\\s*=\\s*\""
+    },
+    {
+      "name": "Raw Cyrillic sheet 03 CSV import caption literal",
+      "pattern": "TaskEstimateImportCaption\\s*=\\s*\""
+    },
+    {
+      "name": "Raw Cyrillic sheet 03 restored header or statistics literal",
+      "pattern": "\"(?:Приоритет|Направление|Описание|ЗНИ/Jira|Примечание|Комментарий|Статистика)\""
+    },
+    {
+      "name": "Raw Cyrillic sheet 03 export filename part",
+      "pattern": "\"(?:_оценка_задач_| Экспресс-оценка\\.xlsx)\""
+    },
+    {
+      "name": "Raw Cyrillic sheet 03 import or clear dialog",
+      "pattern": "\"(?:Импорт задач из CSV|Импорт оценки задач|Очистить все задачи|CSV содержит задач)"
+    }
+  ]
+}

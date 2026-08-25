@@ -1,0 +1,26 @@
+name: Feature request
+description: Предложить улучшение QuarterPlan Excel
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему нужно решить?
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Пользовательский сценарий
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Предлагаемое поведение
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Критичная среда
+      options: [Windows Excel, macOS Excel, XLSX без макросов, Build pipeline, Не зависит от среды]

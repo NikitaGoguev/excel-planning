@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "updatedAt": "2026-08-25",
+  "scenario": "QuarterPlan Excel clean release template",
+  "purpose": "Чистый профиль публичного релиза без персональных данных и задач.",
+  "settings": { "team": "", "projectLead": "", "year": "", "quarter": "", "hoursPerWorkingDay": 8 },
+  "quarterSettings": {
+    "startDate": "", "endDate": "", "calendarWeekdays": "", "workingDays": "",
+    "expectedWeekdayHolidaysToFill": 0, "holidays": []
+  },
+  "teamComposition": [
+    { "role": "Тим-лид / техлид", "count": 0, "comment": "" },
+    { "role": "Лид по аналитике", "count": 0, "comment": "" },
+    { "role": "Аналитик", "count": 0, "comment": "" },
+    { "role": "Разработчик бэкенд", "count": 0, "comment": "" },
+    { "role": "Разработчик фронтенд", "count": 0, "comment": "" },
+    { "role": "Тестировщик", "count": 0, "comment": "" }
+  ],
+  "capacity": { "coreTeamFocusFactor": 0.7, "teamLeadFocusFactor": 0.5, "analysisLeadFocusFactor": 0.5 },
+  "taskEstimates": []
+}

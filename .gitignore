@@ -1,0 +1,26 @@
+# Excel lock and temp files
+~$*
+outputs/~$*.xls*
+*.tmp
+*.bak
+*.repaired.xlsm
+*.tmp.xlsm
+
+# Generated previews and local diagnostics
+outputs/previews_step1/
+outputs/public_screenshot_temp/
+outputs/com_acceptance/
+outputs/*.log
+outputs/*.inspect.ndjson
+logs/
+dist/
+
+# Local caches and OS metadata
+node_modules/
+.cache/
+.DS_Store
+Thumbs.db
+
+# Keep canonical workbook deliverables tracked intentionally.
+!outputs/quarter_planning_step1.xlsx
+!outputs/quarter_planning_step2.xlsm

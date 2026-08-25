@@ -1,0 +1,44 @@
+name: Bug report
+description: Сообщить о воспроизводимой проблеме QuarterPlan Excel
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Версия
+      placeholder: v1.0.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Excel и ОС
+      placeholder: Excel 2016 32-bit, Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: workbook
+    attributes:
+      label: Файл
+      options: [XLSM с макросами, XLSX без макросов, Собственная сборка]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения
+      description: Не прикладывайте реальные персональные или корпоративные данные.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое и фактическое поведение
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Дополнительный контекст
+      description: Обезличенные screenshots, error number, macro name и workbook source.

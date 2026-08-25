@@ -1,0 +1,103 @@
+Option Explicit
+
+Public Sub QuarterPlanReloadBacklogButton()
+    ThisWorkbook.ButtonReloadQuarterPlanBacklog
+End Sub
+
+Public Sub QuarterPlanRecalculateButton()
+    ThisWorkbook.ButtonRecalculateQuarterPlan
+End Sub
+
+Public Sub RunQuarterPlanReloadBacklog()
+    QuarterPlanReloadBacklogButton
+End Sub
+
+Public Sub RunQuarterPlanRecalculate()
+    QuarterPlanRecalculateButton
+End Sub
+
+Public Sub RunQuarterPlanExportBacklog()
+    ThisWorkbook.ButtonExportQuarterPlanBacklog
+End Sub
+
+Public Sub RunQuarterPlanExportBacklogPath(ByVal exportPath As String)
+    ThisWorkbook.ExportQuarterPlanBacklogToXlsxPath exportPath
+End Sub
+
+Public Sub RunQuarterPlanCellAction()
+    On Error GoTo Fail
+
+    ThisWorkbook.HandleQuarterPlanShapeAction CStr(Application.Caller)
+    Exit Sub
+
+Fail:
+    MsgBox "Ошибка RunQuarterPlanCellAction: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub RunQuarterPlanAddAllBacklogToPlan()
+    ThisWorkbook.ButtonAddAllQuarterPlanBacklogToPlan
+End Sub
+
+Public Sub RunQuarterPlanRepairActionButtons()
+    ThisWorkbook.RebuildQuarterPlanActionUi
+End Sub
+
+Public Sub RunTaskEstimateCellAction()
+    On Error GoTo Fail
+
+    ThisWorkbook.HandleTaskEstimateShapeAction CStr(Application.Caller)
+    Exit Sub
+
+Fail:
+    MsgBox "Ошибка RunTaskEstimateCellAction: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub RunTaskEstimateExpressExport()
+    On Error GoTo Fail
+
+    ThisWorkbook.HandleTaskEstimateShapeAction CStr(Application.Caller)
+    Exit Sub
+
+Fail:
+    MsgBox "Ошибка RunTaskEstimateExpressExport: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub RunTaskEstimateRepairActionButtons()
+    ThisWorkbook.RebuildTaskEstimateActionUi
+End Sub
+
+Public Sub RunTaskEstimateImportCsv()
+    ThisWorkbook.ButtonImportTaskEstimatesCsv
+End Sub
+
+Public Sub RunTaskEstimateImportCsvPath(ByVal csvPath As String, ByVal replaceExisting As Boolean)
+    ThisWorkbook.ImportTaskEstimatesFromCsvPath csvPath, replaceExisting
+End Sub
+
+Public Sub RunTaskEstimateImportXlsx()
+    ThisWorkbook.ButtonImportTaskEstimatesXlsx
+End Sub
+
+Public Sub RunTaskEstimateImportXlsxPath(ByVal xlsxPath As String)
+    ThisWorkbook.ImportTaskEstimatesFromXlsxPath xlsxPath
+End Sub
+
+Public Sub RunTaskEstimateClearAll()
+    ThisWorkbook.ButtonClearTaskEstimates
+End Sub
+
+Public Sub RunTaskEstimateRefresh()
+    ThisWorkbook.ButtonRefreshTaskEstimates
+End Sub
+
+Public Sub RunTaskEstimateExportXlsx()
+    ThisWorkbook.ButtonExportTaskEstimatesXlsx
+End Sub
+
+Public Sub RunTaskEstimateExportXlsxPath(ByVal exportPath As String)
+    ThisWorkbook.ExportTaskEstimatesToXlsxPath exportPath
+End Sub
+
+Public Sub RunTaskEstimateExpressExportPath(ByVal rowIndex As Long, ByVal exportPath As String)
+    ThisWorkbook.ExportTaskEstimateExpressToPath rowIndex, exportPath
+End Sub

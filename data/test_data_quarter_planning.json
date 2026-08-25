@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "updatedAt": "2026-08-25",
+  "scenario": "QuarterPlan Excel demo, Q2 2026",
+  "purpose": "Обезличенные демонстрационные данные для сборки, скриншотов и автоматизированной проверки.",
+  "settings": { "team": "Atlas", "projectLead": "Демо-руководитель", "year": 2026, "quarter": 2, "hoursPerWorkingDay": 8 },
+  "quarterSettings": {
+    "startDate": "2026-04-01", "endDate": "2026-06-30", "calendarWeekdays": 65, "workingDays": 62,
+    "expectedWeekdayHolidaysToFill": 3,
+    "holidays": [
+      { "date": "2026-05-01", "name": "Праздничный день 1", "comment": "Обезличенный демонстрационный календарь", "include": "Да" },
+      { "date": "2026-05-11", "name": "Праздничный день 2", "comment": "Обезличенный демонстрационный календарь", "include": "Да" },
+      { "date": "2026-06-12", "name": "Праздничный день 3", "comment": "Обезличенный демонстрационный календарь", "include": "Да" }
+    ]
+  },
+  "teamComposition": [
+    { "role": "Тим-лид / техлид", "count": 1, "comment": "" },
+    { "role": "Лид по аналитике", "count": 1, "comment": "" },
+    { "role": "Аналитик", "count": 2, "comment": "" },
+    { "role": "Разработчик бэкенд", "count": 2, "comment": "" },
+    { "role": "Разработчик фронтенд", "count": 2, "comment": "" },
+    { "role": "Тестировщик", "count": 3, "comment": "" }
+  ],
+  "capacity": {
+    "workingDaysInQuarter": 62, "analysts": 2, "backendDevelopers": 2, "frontendDevelopers": 2,
+    "qaEngineers": 3, "teamLead": 1, "analysisLead": 1,
+    "analystVacationsPersonDays": 0, "backendVacationsPersonDays": 0, "frontendVacationsPersonDays": 0,
+    "qaVacationsPersonDays": 0, "teamLeadVacationsPersonDays": 0, "analysisLeadVacationsPersonDays": 0,
+    "coreTeamFocusFactor": 0.7, "teamLeadFocusFactor": 0.5, "analysisLeadFocusFactor": 0.5
+  },
+  "capacityExpected": {
+    "analysisPersonDays": 117, "analysisPersonHours": 936, "backendPersonDays": 117, "backendPersonHours": 936,
+    "frontendPersonDays": 86, "frontendPersonHours": 688, "qaPersonDays": 130, "qaPersonHours": 1040,
+    "totalPersonDays": 450, "totalPersonHours": 3600
+  },
+  "taskEstimates": [
+    { "priority": 10, "direction": "Личный кабинет", "description": "Единый вход для пользователей", "ticket": "PLAN-1001", "note": "Демо", "AN": 3, "BE": 5, "FE": 5, "QA": 4, "comment": "" },
+    { "priority": 20, "direction": "Уведомления", "description": "Настройка email-уведомлений", "ticket": "PLAN-1002", "note": "", "AN": 4, "BE": 6, "FE": 3, "QA": 4, "comment": "" },
+    { "priority": 30, "direction": "Каталог", "description": "Поиск и фильтрация элементов", "ticket": "PLAN-1003", "note": "", "AN": 5, "BE": 8, "FE": 6, "QA": 6, "comment": "" },
+    { "priority": 40, "direction": "Отчётность", "description": "Экспорт отчёта в XLSX", "ticket": "PLAN-1004", "note": "", "AN": 3, "BE": 7, "FE": 2, "QA": 5, "comment": "" },
+    { "priority": 50, "direction": "Профиль", "description": "Управление настройками профиля", "ticket": "PLAN-1005", "note": "", "AN": 4, "BE": 5, "FE": 7, "QA": 5, "comment": "" },
+    { "priority": 60, "direction": "Интеграции", "description": "Публичный API чтения статусов", "ticket": "PLAN-1006", "note": "", "AN": 6, "BE": 10, "FE": 0, "QA": 7, "comment": "" },
+    { "priority": 70, "direction": "Надёжность", "description": "Мониторинг фоновых операций", "ticket": "PLAN-1007", "note": "", "AN": 2, "BE": 6, "FE": 2, "QA": 5, "comment": "" },
+    { "priority": 80, "direction": "Мобильный UX", "description": "Адаптивная навигация", "ticket": "PLAN-1008", "note": "", "AN": 3, "BE": 2, "FE": 8, "QA": 5, "comment": "" }
+  ]
+}

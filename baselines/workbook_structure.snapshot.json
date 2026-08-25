@@ -1,0 +1,56 @@
+{
+  "actionCells": {
+    "tblPlanBacklog:A54": "++",
+    "tblPlanBacklog:Q2": "Экспорт плана",
+    "tblTaskEstimates:C1": "Экспорт",
+    "tblTaskEstimates:D1": "Импорт",
+    "tblTaskEstimates:D2": "Импорт CSV (до 100)",
+    "tblTaskEstimates:M3": "Экспорт"
+  },
+  "tables": {
+    "tblExpertise": "A3:C7",
+    "tblHolidays": "A13:D16",
+    "tblPlanActive": "A5:S25",
+    "tblPlanBacklog": "A55:S155",
+    "tblPlanGrey": "A30:S50",
+    "tblPlanningRuleSettings": "A29:E35",
+    "tblStatuses": "E3:E10",
+    "tblTaskEstimates": "C3:M103",
+    "tblTeamComposition": "A13:B19",
+    "tblTeamMembers": "A23:L43",
+    "tblYesNo": "G3:G5"
+  },
+  "vbaPublicApi": [
+    "RunQuarterPlanAddAllBacklogToPlan",
+    "RunQuarterPlanCellAction",
+    "RunQuarterPlanExportBacklog",
+    "RunQuarterPlanExportBacklogPath",
+    "RunQuarterPlanRecalculate",
+    "RunQuarterPlanReloadBacklog",
+    "RunQuarterPlanRepairActionButtons",
+    "RunTaskEstimateCellAction",
+    "RunTaskEstimateClearAll",
+    "RunTaskEstimateExportXlsx",
+    "RunTaskEstimateExportXlsxPath",
+    "RunTaskEstimateExpressExport",
+    "RunTaskEstimateExpressExportPath",
+    "RunTaskEstimateImportCsv",
+    "RunTaskEstimateImportCsvPath",
+    "RunTaskEstimateImportXlsx",
+    "RunTaskEstimateImportXlsxPath",
+    "RunTaskEstimateRefresh",
+    "RunTaskEstimateRepairActionButtons"
+  ],
+  "workbook": {
+    "workbookCodeName": "ThisWorkbook",
+    "worksheetCodeNames": [
+      "Sheet1",
+      "Sheet2",
+      "Sheet3",
+      "Sheet4",
+      "Sheet5",
+      "Sheet6",
+      "Sheet7"
+    ]
+  }
+}

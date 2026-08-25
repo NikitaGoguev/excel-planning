@@ -1,0 +1,10 @@
+{
+  "tables": {
+    "tblPlanBacklog": "A55:S155"
+  },
+  "requiredCells": {
+    "A54": "++",
+    "Q2": "Экспорт плана"
+  },
+  "visibleColumns": ["T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"]
+}

@@ -1,0 +1,18 @@
+{
+  "workbook": {
+    "sheetCount": 7,
+    "workbookCodeName": "ThisWorkbook",
+    "sheetNames": [
+      "00_Настройки",
+      "01_Настройки квартала",
+      "02_Capacity",
+      "03_Оценка задач",
+      "04_Квартальный план",
+      "99_Справочники",
+      "100_Шаблон экспресс оценки"
+    ]
+  },
+  "snapshots": {
+    "structure": "baselines/workbook_structure.snapshot.json"
+  }
+}
