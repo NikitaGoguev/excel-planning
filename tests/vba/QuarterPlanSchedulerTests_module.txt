@@ -1,17 +1,28 @@
 Option Explicit
 
-Public Function RunQuarterPlanSchedulerUnitTests() As Long
-    Dim scenario As Long
-    For scenario = 1 To 32
-        RunQuarterPlanSchedulerScenario scenario
-        RunQuarterPlanSchedulerUnitTests = RunQuarterPlanSchedulerUnitTests + 1
-    Next scenario
-End Function
+Private Const QPS_TEST_SCENARIO_COUNT As Long = 52
 
-Private Sub RunQuarterPlanSchedulerScenario(ByVal scenario As Long)
+Public Function RunQuarterPlanSchedulerUnitTests() As String
+    Dim scenario As Long
+    Dim completedScenarios As Long
     Dim tasks As Variant, resources As Variant, holidays As Variant, rules As Variant, result As Variant
     Dim firstDate As Date, focusFactor As Double
 
+    On Error GoTo TestFailure
+    For scenario = 1 To QPS_TEST_SCENARIO_COUNT
+        BuildSchedulerScenario scenario, tasks, resources, holidays, rules, firstDate, focusFactor
+        result = QuarterPlanSchedule(tasks, resources, holidays, rules, firstDate, focusFactor)
+        AssertSchedulerScenario scenario, result
+        completedScenarios = completedScenarios + 1
+    Next scenario
+    RunQuarterPlanSchedulerUnitTests = "PASS|" & CStr(completedScenarios)
+    Exit Function
+TestFailure:
+    RunQuarterPlanSchedulerUnitTests = "FAIL|" & CStr(scenario) & "|" & Err.Description
+End Function
+
+Private Sub BuildSchedulerScenario(ByVal scenario As Long, ByRef tasks As Variant, ByRef resources As Variant, ByRef holidays As Variant, ByRef rules As Variant, ByRef firstDate As Date, ByRef focusFactor As Double)
+    tasks = Empty
     firstDate = DateSerial(2026, 1, 5)
     focusFactor = 1
     ReDim tasks(1 To 2, 1 To 6)
@@ -62,48 +73,269 @@ Private Sub RunQuarterPlanSchedulerScenario(ByVal scenario As Long)
         Case 30: firstDate = DateSerial(2026, 1, 3): tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
         Case 31: tasks(1, 3) = 100: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
         Case 32: focusFactor = 0.5: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 33: tasks = Empty
+        Case 34: tasks(1, 2) = "MYSTERY"
+        Case 35: tasks(1, 3) = -1: tasks(1, 4) = "": tasks(1, 5) = "text": tasks(1, 6) = Empty
+        Case 36: resources = Empty
+        Case 37: resources = SchedulerTestResourcesWithout("QA"): tasks(1, 6) = 0
+        Case 38
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            resources(1, 5) = firstDate: resources(1, 6) = DateAdd("d", 2, firstDate)
+        Case 39
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            resources(1, 7) = firstDate: resources(1, 8) = DateAdd("d", 2, firstDate)
+        Case 40
+            firstDate = DateSerial(2026, 1, 9)
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            resources(1, 3) = firstDate: resources(1, 4) = DateAdd("d", 3, firstDate)
+        Case 41
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            resources(1, 3) = firstDate: resources(1, 4) = DateAdd("d", 1, firstDate)
+            holidays = Array(DateAdd("d", 2, firstDate))
+        Case 42
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            holidays = Array("not-a-date", firstDate, firstDate)
+        Case 43
+            resources = SchedulerTestResourcesWithAnalystAllocations(0.5, 1)
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            tasks(2, 1) = True: tasks(2, 2) = "AN": tasks(2, 3) = 1
+        Case 44
+            resources = SchedulerTestResourcesWithAnalystAllocations(0.5, 1)
+            resources(5, 3) = firstDate: resources(5, 4) = DateAdd("d", 2, firstDate)
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 45
+            resources(1, 2) = 0.5: focusFactor = 0.5
+            tasks(1, 3) = 1: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 46: tasks(1, 3) = 1.0000005: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 47: tasks(1, 3) = 1.000002: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 48: rules = Empty
+        Case 49: rules = SchedulerTestNonNumericRules()
+        Case 50
+            tasks(1, 3) = 4: tasks(1, 4) = 4: tasks(1, 5) = 1: tasks(1, 6) = 0
+            rules(1, 2) = 1: rules(2, 2) = 0.25: rules(3, 2) = 2: rules(4, 2) = 0.75
+        Case 51: holidays = Array(DateSerial(2026, 1, 8))
+        Case 52
+            ReDim tasks(1 To 3, 1 To 6)
+            tasks(1, 1) = True: tasks(1, 2) = "AN": tasks(1, 3) = 2
+            tasks(2, 1) = True: tasks(2, 2) = "AN": tasks(2, 3) = 2
+            tasks(3, 1) = True: tasks(3, 2) = "AN": tasks(3, 3) = 1
+            resources = SchedulerTestResourcesWithSecondAnalyst()
     End Select
-
-    result = QuarterPlanSchedule(tasks, resources, holidays, rules, firstDate, focusFactor)
-    AssertSchedulerScenario scenario, result, firstDate
 End Sub
 
-Private Sub AssertSchedulerScenario(ByVal scenario As Long, ByRef result As Variant, ByVal firstDate As Date)
+Private Function SchedulerScenarioName(ByVal scenario As Long) As String
     Select Case scenario
-        Case 1: SchedulerAssert IsEmpty(result(1, 1)), scenario, "empty task was scheduled"
-        Case 2: SchedulerAssert result(1, 1) = 8 And IsEmpty(result(1, 2)), scenario, "deferred task"
-        Case 3: SchedulerAssert Not IsEmpty(result(1, 3)) And IsEmpty(result(1, 4)), scenario, "analysis-only status"
-        Case 4: SchedulerAssert Not IsEmpty(result(1, 4)) And IsEmpty(result(1, 6)), scenario, "development-ready status"
-        Case 5: SchedulerAssert Not IsEmpty(result(1, 4)) And IsEmpty(result(1, 5)), scenario, "backend-ready status"
-        Case 6: SchedulerAssert IsEmpty(result(1, 4)) And Not IsEmpty(result(1, 5)), scenario, "frontend-ready status"
-        Case 7: SchedulerAssert Not IsEmpty(result(1, 3)) And Not IsEmpty(result(1, 6)), scenario, "full path"
-        Case 8: SchedulerAssert IsEmpty(result(1, 3)) And Not IsEmpty(result(1, 4)), scenario, "zero AN"
-        Case 9: SchedulerAssert IsEmpty(result(1, 4)) And Not IsEmpty(result(1, 5)), scenario, "zero BE"
-        Case 10: SchedulerAssert IsEmpty(result(1, 5)) And Not IsEmpty(result(1, 6)), scenario, "zero FE"
-        Case 11: SchedulerAssert IsEmpty(result(1, 6)) And IsDate(result(1, 2)), scenario, "zero QA"
-        Case 12: SchedulerAssert result(1, 1) = 0 And IsEmpty(result(1, 2)), scenario, "all stages zero"
-        Case 13: SchedulerAssert CDate(result(1, 9)) > CDate(result(1, 8)), scenario, "AN overlap lower boundary"
-        Case 14: SchedulerAssert CDate(result(1, 9)) <= CDate(result(1, 8)), scenario, "AN overlap upper boundary"
-        Case 15: SchedulerAssert CDate(result(1, 11)) > CDate(result(1, 10)), scenario, "BE overlap lower boundary"
-        Case 16: SchedulerAssert CDate(result(1, 11)) <= CDate(result(1, 10)), scenario, "BE overlap upper boundary"
-        Case 17: SchedulerAssert CDate(result(1, 13)) > CDate(result(1, 10)), scenario, "QA second part only"
-        Case 18: SchedulerAssert CDate(result(1, 13)) <= CDate(result(1, 10)), scenario, "QA split overlap"
-        Case 19: SchedulerAssert IsDate(result(1, 13)) And IsDate(result(1, 14)), scenario, "QA first part only"
-        Case 20: SchedulerAssert result(1, 3) = 4, scenario, "allocation"
-        Case 21: SchedulerAssert CDate(result(1, 7)) = DateAdd("d", 1, firstDate), scenario, "holiday"
-        Case 22: SchedulerAssert CDate(result(1, 7)) = DateAdd("d", 3, firstDate), scenario, "vacation"
-        Case 23: SchedulerAssert CDate(result(1, 7)) = firstDate, scenario, "employee replacement"
-        Case 24: SchedulerAssert InStr(1, CStr(result(1, 15)), "AN", vbTextCompare) > 0, scenario, "missing AN"
-        Case 25: SchedulerAssert InStr(1, CStr(result(1, 15)), "BE", vbTextCompare) > 0, scenario, "missing BE"
-        Case 26: SchedulerAssert InStr(1, CStr(result(1, 15)), "FE", vbTextCompare) > 0, scenario, "missing FE"
-        Case 27: SchedulerAssert InStr(1, CStr(result(1, 15)), "QA", vbTextCompare) > 0, scenario, "missing QA"
-        Case 28: SchedulerAssert CDate(result(2, 7)) > CDate(result(1, 8)), scenario, "task competition"
-        Case 29: SchedulerAssert CDate(result(2, 7)) = CDate(result(1, 7)), scenario, "parallel replacement resource"
-        Case 30: SchedulerAssert Weekday(CDate(result(1, 7)), vbMonday) = 1, scenario, "weekend start"
-        Case 31: SchedulerAssert CDate(result(1, 2)) > DateAdd("d", 100, firstDate), scenario, "long task beyond quarter"
-        Case 32: SchedulerAssert result(1, 1) = 4 And result(1, 3) = 4, scenario, "focus factor"
+        Case 1: SchedulerScenarioName = "absent task"
+        Case 2: SchedulerScenarioName = "deferred"
+        Case 3: SchedulerScenarioName = "AN status"
+        Case 4: SchedulerScenarioName = "DEV status"
+        Case 5: SchedulerScenarioName = "BE status"
+        Case 6: SchedulerScenarioName = "FE status"
+        Case 7: SchedulerScenarioName = "full path"
+        Case 8: SchedulerScenarioName = "zero AN"
+        Case 9: SchedulerScenarioName = "zero BE"
+        Case 10: SchedulerScenarioName = "zero FE"
+        Case 11: SchedulerScenarioName = "zero QA"
+        Case 12: SchedulerScenarioName = "all stages zero"
+        Case 13: SchedulerScenarioName = "AN overlap boundary sequential"
+        Case 14: SchedulerScenarioName = "AN overlap boundary concurrent"
+        Case 15: SchedulerScenarioName = "BE overlap boundary sequential"
+        Case 16: SchedulerScenarioName = "BE overlap boundary concurrent"
+        Case 17: SchedulerScenarioName = "QA second part only"
+        Case 18: SchedulerScenarioName = "QA split"
+        Case 19: SchedulerScenarioName = "QA first part only"
+        Case 20: SchedulerScenarioName = "allocation"
+        Case 21: SchedulerScenarioName = "holiday"
+        Case 22: SchedulerScenarioName = "first vacation"
+        Case 23: SchedulerScenarioName = "replacement analyst"
+        Case 24: SchedulerScenarioName = "missing AN"
+        Case 25: SchedulerScenarioName = "missing BE"
+        Case 26: SchedulerScenarioName = "missing FE"
+        Case 27: SchedulerScenarioName = "missing QA"
+        Case 28: SchedulerScenarioName = "task competition"
+        Case 29: SchedulerScenarioName = "parallel analysts"
+        Case 30: SchedulerScenarioName = "weekend start"
+        Case 31: SchedulerScenarioName = "long task"
+        Case 32: SchedulerScenarioName = "focus factor"
+        Case 33: SchedulerScenarioName = "empty tasks matrix"
+        Case 34: SchedulerScenarioName = "unknown status"
+        Case 35: SchedulerScenarioName = "invalid estimates"
+        Case 36: SchedulerScenarioName = "all resources missing"
+        Case 37: SchedulerScenarioName = "zero QA without QA resource"
+        Case 38: SchedulerScenarioName = "second vacation"
+        Case 39: SchedulerScenarioName = "third vacation"
+        Case 40: SchedulerScenarioName = "vacation over weekend"
+        Case 41: SchedulerScenarioName = "holiday after vacation"
+        Case 42: SchedulerScenarioName = "duplicate and invalid holidays"
+        Case 43: SchedulerScenarioName = "higher allocation selection"
+        Case 44: SchedulerScenarioName = "replacement for higher allocation"
+        Case 45: SchedulerScenarioName = "allocation and focus"
+        Case 46: SchedulerScenarioName = "fraction below tolerance"
+        Case 47: SchedulerScenarioName = "fraction above tolerance"
+        Case 48: SchedulerScenarioName = "missing rules fallback"
+        Case 49: SchedulerScenarioName = "non-numeric rules fallback"
+        Case 50: SchedulerScenarioName = "custom overlap rules"
+        Case 51: SchedulerScenarioName = "QA split with holiday"
+        Case 52: SchedulerScenarioName = "three tasks two analysts"
     End Select
+End Function
+
+Private Sub AssertSchedulerScenario(ByVal scenario As Long, ByRef result As Variant)
+    Dim expectedRows As Long, actualRows As Long, rowIndex As Long, colIndex As Long
+    Dim expected As Variant
+
+    expectedRows = SchedulerExpectedRows(scenario)
+    actualRows = SchedulerMatrixRows(result)
+    If actualRows <> expectedRows Then
+        Err.Raise vbObjectError + 2100 + scenario, "QuarterPlanSchedulerTests", SchedulerFailurePrefix(scenario) & "row count expected " & CStr(expectedRows) & ", actual " & CStr(actualRows)
+    End If
+    If expectedRows = 0 Then
+        If Not IsEmpty(result) Then Err.Raise vbObjectError + 2100 + scenario, "QuarterPlanSchedulerTests", SchedulerFailurePrefix(scenario) & "result expected <empty>, actual non-empty scalar"
+        Exit Sub
+    End If
+
+    For rowIndex = 1 To expectedRows
+        expected = SchedulerExpectedRow(scenario, rowIndex)
+        For colIndex = 1 To 15
+            AssertSchedulerValue scenario, rowIndex, colIndex, expected(colIndex), result(rowIndex, colIndex)
+        Next colIndex
+    Next rowIndex
 End Sub
+
+Private Function SchedulerExpectedRows(ByVal scenario As Long) As Long
+    If scenario = 33 Then Exit Function
+    If scenario = 52 Then SchedulerExpectedRows = 3 Else SchedulerExpectedRows = 2
+End Function
+
+Private Function SchedulerExpectedRow(ByVal scenario As Long, ByVal rowIndex As Long) As Variant
+    Dim expected(1 To 15) As Variant
+
+    If rowIndex = 2 Then
+        Select Case scenario
+            Case 28: expected(1) = 1: expected(2) = DateSerial(2026, 1, 7): expected(3) = 1: expected(7) = DateSerial(2026, 1, 7): expected(8) = DateSerial(2026, 1, 7)
+            Case 29: expected(1) = 1: expected(2) = DateSerial(2026, 1, 5): expected(3) = 1: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 5)
+            Case 43: expected(1) = 1: expected(2) = DateSerial(2026, 1, 6): expected(3) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6)
+            Case 52: expected(1) = 2: expected(2) = DateSerial(2026, 1, 6): expected(3) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6)
+        End Select
+        SchedulerExpectedRow = expected
+        Exit Function
+    End If
+    If rowIndex = 3 Then
+        expected(1) = 1: expected(2) = DateSerial(2026, 1, 7): expected(3) = 1: expected(7) = DateSerial(2026, 1, 7): expected(8) = DateSerial(2026, 1, 7)
+        SchedulerExpectedRow = expected
+        Exit Function
+    End If
+
+    Select Case scenario
+        Case 1
+        Case 2: expected(1) = 8
+        Case 3: expected(1) = 8: expected(2) = DateSerial(2026, 1, 6): expected(3) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6)
+        Case 4: expected(1) = 8: expected(2) = DateSerial(2026, 1, 12): expected(3) = 2: expected(4) = 2: expected(5) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 8): expected(11) = DateSerial(2026, 1, 9): expected(12) = DateSerial(2026, 1, 12)
+        Case 5: expected(1) = 8: expected(2) = DateSerial(2026, 1, 8): expected(3) = 2: expected(4) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 8)
+        Case 6: expected(1) = 8: expected(2) = DateSerial(2026, 1, 8): expected(3) = 2: expected(5) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(11) = DateSerial(2026, 1, 7): expected(12) = DateSerial(2026, 1, 8)
+        Case 7, 18, 34, 48, 49: SetExpectedFullPath expected, DateSerial(2026, 1, 13)
+        Case 8: expected(1) = 6: expected(2) = DateSerial(2026, 1, 9): expected(4) = 2: expected(5) = 2: expected(6) = 2: expected(9) = DateSerial(2026, 1, 5): expected(10) = DateSerial(2026, 1, 6): expected(11) = DateSerial(2026, 1, 7): expected(12) = DateSerial(2026, 1, 8): expected(13) = DateSerial(2026, 1, 5): expected(14) = DateSerial(2026, 1, 9)
+        Case 9: expected(1) = 6: expected(2) = DateSerial(2026, 1, 9): expected(3) = 2: expected(5) = 2: expected(6) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(11) = DateSerial(2026, 1, 7): expected(12) = DateSerial(2026, 1, 8): expected(13) = DateSerial(2026, 1, 7): expected(14) = DateSerial(2026, 1, 9)
+        Case 10: expected(1) = 6: expected(2) = DateSerial(2026, 1, 9): expected(3) = 2: expected(4) = 2: expected(6) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 8): expected(13) = DateSerial(2026, 1, 7): expected(14) = DateSerial(2026, 1, 9)
+        Case 11, 37: expected(1) = 6: expected(2) = DateSerial(2026, 1, 12): expected(3) = 2: expected(4) = 2: expected(5) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 8): expected(11) = DateSerial(2026, 1, 9): expected(12) = DateSerial(2026, 1, 12)
+        Case 12, 35: expected(1) = 0
+        Case 13: expected(1) = 6: expected(2) = DateSerial(2026, 1, 12): expected(3) = 5: expected(4) = 1: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 9): expected(9) = DateSerial(2026, 1, 12): expected(10) = DateSerial(2026, 1, 12)
+        Case 14: expected(1) = 7: expected(2) = DateSerial(2026, 1, 12): expected(3) = 6: expected(4) = 1: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 12): expected(9) = DateSerial(2026, 1, 9): expected(10) = DateSerial(2026, 1, 9)
+        Case 15: expected(1) = 6: expected(2) = DateSerial(2026, 1, 12): expected(4) = 5: expected(5) = 1: expected(9) = DateSerial(2026, 1, 5): expected(10) = DateSerial(2026, 1, 9): expected(11) = DateSerial(2026, 1, 12): expected(12) = DateSerial(2026, 1, 12)
+        Case 16: expected(1) = 7: expected(2) = DateSerial(2026, 1, 12): expected(4) = 6: expected(5) = 1: expected(9) = DateSerial(2026, 1, 5): expected(10) = DateSerial(2026, 1, 12): expected(11) = DateSerial(2026, 1, 9): expected(12) = DateSerial(2026, 1, 9)
+        Case 17: SetExpectedFullPath expected, DateSerial(2026, 1, 14): expected(13) = DateSerial(2026, 1, 13): expected(14) = DateSerial(2026, 1, 14)
+        Case 19: SetExpectedFullPath expected, DateSerial(2026, 1, 8): expected(13) = DateSerial(2026, 1, 7): expected(14) = DateSerial(2026, 1, 8)
+        Case 20: SetExpectedAnalysisOnly expected, 2, 4, DateSerial(2026, 1, 5), DateSerial(2026, 1, 8)
+        Case 21: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 6), DateSerial(2026, 1, 7)
+        Case 22, 38, 39, 41: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 8), DateSerial(2026, 1, 9)
+        Case 23: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 5), DateSerial(2026, 1, 6)
+        Case 24: expected(1) = 8: expected(15) = "No AN resources."
+        Case 25: expected(1) = 8: expected(15) = "No BE resources."
+        Case 26: expected(1) = 8: expected(15) = "No FE resources."
+        Case 27: expected(1) = 8: expected(15) = "No QA resources."
+        Case 28, 29, 43, 52: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 5), DateSerial(2026, 1, 6)
+        Case 30: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 5), DateSerial(2026, 1, 6)
+        Case 31: SetExpectedAnalysisOnly expected, 100, 100, DateSerial(2026, 1, 5), DateSerial(2026, 5, 22)
+        Case 32: SetExpectedAnalysisOnly expected, 4, 4, DateSerial(2026, 1, 5), DateSerial(2026, 1, 8)
+        Case 36: expected(1) = 8: expected(15) = "No AN resources. No BE resources. No FE resources. No QA resources."
+        Case 40: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 13), DateSerial(2026, 1, 14)
+        Case 42: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 6), DateSerial(2026, 1, 7)
+        Case 44, 45: SetExpectedAnalysisOnly expected, 2, 4, DateSerial(2026, 1, 5), DateSerial(2026, 1, 8)
+        Case 46: SetExpectedAnalysisOnly expected, 1, 1, DateSerial(2026, 1, 5), DateSerial(2026, 1, 5)
+        Case 47: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 5), DateSerial(2026, 1, 6)
+        Case 50: expected(1) = 9: expected(2) = DateSerial(2026, 1, 8): expected(3) = 4: expected(4) = 4: expected(5) = 1: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 8): expected(9) = DateSerial(2026, 1, 5): expected(10) = DateSerial(2026, 1, 8): expected(11) = DateSerial(2026, 1, 7): expected(12) = DateSerial(2026, 1, 7)
+        Case 51: expected(1) = 8: expected(2) = DateSerial(2026, 1, 14): expected(3) = 2: expected(4) = 2: expected(5) = 2: expected(6) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 9): expected(11) = DateSerial(2026, 1, 12): expected(12) = DateSerial(2026, 1, 13): expected(13) = DateSerial(2026, 1, 7): expected(14) = DateSerial(2026, 1, 14)
+    End Select
+    SchedulerExpectedRow = expected
+End Function
+
+Private Sub SetExpectedAnalysisOnly(ByRef expected() As Variant, ByVal effort As Long, ByVal duration As Long, ByVal startDate As Date, ByVal finishDate As Date)
+    expected(1) = effort: expected(2) = finishDate: expected(3) = duration: expected(7) = startDate: expected(8) = finishDate
+End Sub
+
+Private Sub SetExpectedFullPath(ByRef expected() As Variant, ByVal readyDate As Date)
+    expected(1) = 8: expected(2) = readyDate
+    expected(3) = 2: expected(4) = 2: expected(5) = 2: expected(6) = 2
+    expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6)
+    expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 8)
+    expected(11) = DateSerial(2026, 1, 9): expected(12) = DateSerial(2026, 1, 12)
+    expected(13) = DateSerial(2026, 1, 7): expected(14) = readyDate
+End Sub
+
+Private Sub AssertSchedulerValue(ByVal scenario As Long, ByVal rowIndex As Long, ByVal colIndex As Long, ByVal expected As Variant, ByVal actual As Variant)
+    Dim matches As Boolean
+    If IsEmpty(expected) Then
+        matches = IsEmpty(actual)
+    ElseIf SchedulerOutputIsDate(colIndex) Then
+        If IsDate(actual) Then matches = (CLng(CDate(actual)) = CLng(CDate(expected)))
+    ElseIf IsNumeric(expected) Then
+        If IsNumeric(actual) Then matches = (Abs(CDbl(actual) - CDbl(expected)) <= 0.0000001)
+    Else
+        If Not IsError(actual) Then matches = (CStr(actual) = CStr(expected))
+    End If
+    If matches Then Exit Sub
+    Err.Raise vbObjectError + 2100 + scenario, "QuarterPlanSchedulerTests", SchedulerFailurePrefix(scenario) & "row " & CStr(rowIndex) & " field " & SchedulerOutputFieldName(colIndex) & " expected " & SchedulerValueText(expected, colIndex) & ", actual " & SchedulerValueText(actual, colIndex)
+End Sub
+
+Private Function SchedulerOutputIsDate(ByVal colIndex As Long) As Boolean
+    SchedulerOutputIsDate = (colIndex = 2 Or (colIndex >= 7 And colIndex <= 14))
+End Function
+
+Private Function SchedulerOutputFieldName(ByVal colIndex As Long) As String
+    Select Case colIndex
+        Case 1: SchedulerOutputFieldName = "effort"
+        Case 2: SchedulerOutputFieldName = "ready"
+        Case 3: SchedulerOutputFieldName = "AN days"
+        Case 4: SchedulerOutputFieldName = "BE days"
+        Case 5: SchedulerOutputFieldName = "FE days"
+        Case 6: SchedulerOutputFieldName = "QA days"
+        Case 7: SchedulerOutputFieldName = "AN start"
+        Case 8: SchedulerOutputFieldName = "AN finish"
+        Case 9: SchedulerOutputFieldName = "BE start"
+        Case 10: SchedulerOutputFieldName = "BE finish"
+        Case 11: SchedulerOutputFieldName = "FE start"
+        Case 12: SchedulerOutputFieldName = "FE finish"
+        Case 13: SchedulerOutputFieldName = "QA start"
+        Case 14: SchedulerOutputFieldName = "QA finish"
+        Case 15: SchedulerOutputFieldName = "diagnostic"
+    End Select
+End Function
+
+Private Function SchedulerFailurePrefix(ByVal scenario As Long) As String
+    SchedulerFailurePrefix = "Scenario " & CStr(scenario) & " (" & SchedulerScenarioName(scenario) & ") failed: "
+End Function
+
+Private Function SchedulerValueText(ByVal value As Variant, ByVal colIndex As Long) As String
+    If IsError(value) Then
+        SchedulerValueText = "<error>"
+    ElseIf IsEmpty(value) Then
+        SchedulerValueText = "<empty>"
+    ElseIf SchedulerOutputIsDate(colIndex) And IsDate(value) Then
+        SchedulerValueText = Format$(CDate(value), "yyyy-mm-dd")
+    Else
+        SchedulerValueText = CStr(value)
+    End If
+End Function
 
 Private Function SchedulerTestResources() As Variant
     Dim result(1 To 4, 1 To 8) As Variant
@@ -115,11 +347,16 @@ Private Function SchedulerTestResources() As Variant
 End Function
 
 Private Function SchedulerTestResourcesWithSecondAnalyst() As Variant
+    SchedulerTestResourcesWithSecondAnalyst = SchedulerTestResourcesWithAnalystAllocations(1, 1)
+End Function
+
+Private Function SchedulerTestResourcesWithAnalystAllocations(ByVal firstAllocation As Double, ByVal secondAllocation As Double) As Variant
     Dim result(1 To 5, 1 To 8) As Variant, base As Variant, rowIndex As Long, colIndex As Long
     base = SchedulerTestResources()
     For rowIndex = 1 To 4: For colIndex = 1 To 8: result(rowIndex, colIndex) = base(rowIndex, colIndex): Next colIndex: Next rowIndex
-    result(5, 1) = "AN": result(5, 2) = 1
-    SchedulerTestResourcesWithSecondAnalyst = result
+    result(1, 2) = firstAllocation
+    result(5, 1) = "AN": result(5, 2) = secondAllocation
+    SchedulerTestResourcesWithAnalystAllocations = result
 End Function
 
 Private Function SchedulerTestResourcesWithout(ByVal excludedCode As String) As Variant
@@ -141,6 +378,16 @@ Private Function SchedulerTestRules() As Variant
     SchedulerTestRules = result
 End Function
 
-Private Sub SchedulerAssert(ByVal condition As Boolean, ByVal scenario As Long, ByVal label As String)
-    If Not condition Then Err.Raise vbObjectError + 2100 + scenario, "QuarterPlanSchedulerTests", "Scenario " & scenario & " failed: " & label
-End Sub
+Private Function SchedulerTestNonNumericRules() As Variant
+    Dim result As Variant, rowIndex As Long
+    result = SchedulerTestRules()
+    For rowIndex = 1 To 5: result(rowIndex, 2) = "invalid": Next rowIndex
+    SchedulerTestNonNumericRules = result
+End Function
+
+Private Function SchedulerMatrixRows(ByRef value As Variant) As Long
+    If Not IsArray(value) Then Exit Function
+    On Error GoTo SafeExit
+    SchedulerMatrixRows = UBound(value, 1) - LBound(value, 1) + 1
+SafeExit:
+End Function

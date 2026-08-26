@@ -10,7 +10,7 @@
   "keywords": ["excel", "exceljs", "vba", "capacity-planning", "quarterly-planning", "resource-planning"],
   "private": true,
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=26 <27"
   },
   "scripts": {
     "env:check": "node scripts/check_environment.mjs",
@@ -30,6 +30,12 @@
     "verify:release": "node scripts/check_environment.mjs && node scripts/build_release.mjs && node scripts/verify_public_release.mjs",
     "verify:release:excel": "node scripts/run_windows_powershell.mjs verify_release_excel_com.ps1",
     "verify:scheduler": "node scripts/run_windows_powershell.mjs verify_scheduler_com.ps1",
+    "poc:tstvba:lint": "tsc -p poc/typescript-to-vba/tsconfig.json --noEmit && node scripts/lint_typescript_to_vba_poc.mjs",
+    "poc:tstvba:verify": "npm run poc:tstvba:lint && node --test poc/typescript-to-vba-poc.test.mjs && node scripts/verify_typescript_to_vba_poc.mjs",
+    "poc:tstvba:verify:excel": "node scripts/run_windows_powershell.mjs verify_typescript_to_vba_poc.ps1",
+    "poc:tsvba:lint": "tsc -p poc/restricted-ts-vba/tsconfig.json --noEmit && node scripts/lint_restricted_ts_vba_poc.mjs",
+    "poc:tsvba:verify": "npm run poc:tsvba:lint && node --test poc/restricted-ts-vba/test/*.test.mjs && node scripts/verify_restricted_ts_vba_poc.mjs",
+    "poc:tsvba:verify:excel": "node scripts/run_windows_powershell.mjs verify_restricted_ts_vba_poc.ps1",
     "verify:excel": "node scripts/run_windows_powershell.mjs verify_scheduler_com.ps1 && node scripts/run_windows_powershell.mjs verify_all.ps1 -SkipBuild",
     "preview": "node scripts/run_windows_powershell.mjs render_workbook_previews.ps1",
     "preview:public": "node scripts/run_windows_powershell.mjs render_public_screenshots.ps1"
@@ -40,5 +46,9 @@
   },
   "overrides": {
     "uuid": "11.1.1"
+  },
+  "devDependencies": {
+    "typescript": "5.8.2",
+    "typescript-to-vba": "1.0.1"
   }
 }

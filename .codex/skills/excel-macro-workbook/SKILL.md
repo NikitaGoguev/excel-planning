@@ -47,7 +47,7 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
    For Windows desktop Excel acceptance, use:
    - `npm run verify:excel`
 
-   For the isolated 32-scenario domain scheduler gate, use:
+   For the isolated 52-scenario exact-output domain scheduler gate, use:
    - `npm run verify:scheduler`
 
    For clean public artifacts and the public-data gate, use:
@@ -58,12 +58,13 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 
 ## Constraints
 
-- Use Node.js 24.x with the locked public `exceljs` and `jszip` dependencies. Do not add personal runtime paths or private bundled packages.
+- Use Node.js 26.x with the locked public `exceljs` and `jszip` dependencies. Do not add personal runtime paths or private bundled packages.
 - Keep XLSX generation and XLSM packaging free of PowerShell, Excel COM, and platform-specific filesystem paths.
 - Never binary-edit `vbaProject.bin`.
 - Treat `config/workbook-limits.json` as the only source for structural capacities. Run `npm run generate:limits`; never hand-edit `QuarterPlanLimits_module.txt`.
 - Keep `ThisWorkbook` limited to events and stable compatibility wrappers. Add/update managed modules through `contracts/vba.contract.json` so Excel sync can preserve document/sheet components.
 - Keep `QuarterPlanScheduler` free of Excel Object Model and UI state; pass only Variant matrices/scalars and test changes with the test-only COM harness.
+- The scheduler COM harness replaces the module in a temporary XLSM with the current `assets/vba/QuarterPlanScheduler_module.txt` source before running all 52 scenarios, so `verify:scheduler` does not depend on a prior VBA sync. Desktop COM acceptance separately requires the embedded scheduler to match that source.
 - Keep demo data anonymized and build public releases from the clean release profile. Public workbook metadata must identify `QuarterPlan Excel`, not a local Office user or absolute path.
 - Prefer updating VBA source text and resyncing through Excel.
 - Preserve the Excel-saved template and validated `vbaProject.step2.bin`.

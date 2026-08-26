@@ -7,8 +7,8 @@ import JSZip from "jszip";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nodeMajor = Number(process.versions.node.split(".")[0]);
-if (nodeMajor !== 24) {
-  throw new Error(`Node.js 24.x is required; current version is ${process.versions.node}`);
+if (nodeMajor !== 26) {
+  throw new Error(`Node.js 26.x is required; current version is ${process.versions.node}`);
 }
 
 for (const relativePath of [

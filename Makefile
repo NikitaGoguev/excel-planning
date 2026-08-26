@@ -6,7 +6,7 @@ NPM ?= npm
 
 help:
 	@echo Available targets:
-	@echo   make env-check          Check Node 24, dependencies, and required assets
+	@echo   make env-check          Check Node 26, dependencies, and required assets
 	@echo   make build              Build XLSX and package XLSM using portable Node scripts
 	@echo   make build-xlsx         Build the base XLSX workbook
 	@echo   make build-xlsm         Build the XLSM from the current XLSX and VBA project

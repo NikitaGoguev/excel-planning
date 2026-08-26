@@ -232,7 +232,7 @@ Deterministic verification is enforced by project scripts:
 - `scripts/verify_static_contracts.mjs` checks package structure, table ranges, required action cells, visible technical columns, hidden filter-button contracts, workbook design contracts, required public macros, and forbidden VBA patterns without Excel.
 - `scripts/verify_excel_com.ps1` opens the `.xlsm` through desktop Excel COM, checks `VBProject`, runs smoke macros, validates table ranges and shape `OnAction` values, and scans formula errors.
 - `npm run verify` is the portable build and static gate; `npm run verify:excel` is the separate Windows desktop Excel acceptance entrypoint.
-- `npm run verify:scheduler` imports a test-only module into a temporary XLSM copy and runs at least 32 pure-engine business scenarios; it is included in `verify:excel`.
+- `npm run verify:scheduler` replaces the scheduler in a temporary XLSM copy with the current source, imports a test-only module, and compares all 15 output fields across exactly 52 pure-engine business scenarios; it is included in `verify:excel`. Desktop COM acceptance separately rejects an embedded scheduler that is stale relative to source.
 - `.githooks/pre-commit` runs the portable `npm run verify:static`; keep `git config core.hooksPath .githooks` enabled for this repository.
 
 ## File Handling

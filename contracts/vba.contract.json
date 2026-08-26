@@ -36,7 +36,7 @@
     "component": "QuarterPlanScheduler",
     "entrypoint": "QuarterPlanSchedule",
     "testSource": "tests/vba/QuarterPlanSchedulerTests_module.txt",
-    "minimumScenarios": 32,
+    "scenarioCount": 52,
     "forbiddenPatterns": ["\\bWorkbook\\b", "\\bWorksheet\\b", "\\bRange\\b", "\\bListObject\\b", "\\bApplication\\b", "\\bThisWorkbook\\b"]
   },
   "handwrittenLimitForbiddenPatterns": [

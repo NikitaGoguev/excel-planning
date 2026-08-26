@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 24.x and npm;
+- Node.js 26.x and npm;
 - locked dependencies installed through `npm ci`;
 - Windows desktop Excel only for VBA sync, COM acceptance and PNG screenshots.
 

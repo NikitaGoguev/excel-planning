@@ -455,9 +455,9 @@ async function assertVbaContracts(vbaContract) {
       if (new RegExp(sourcePattern, "i").test(schedulerSource)) throw new Error(`scheduler is not domain-pure: ${sourcePattern}`);
     }
     const testSource = await fs.readFile(path.join(repoRoot, vbaContract.scheduler.testSource), "utf8");
-    const scenarioMatch = testSource.match(/For\s+scenario\s*=\s*1\s+To\s+(\d+)/i);
-    if (!scenarioMatch || Number(scenarioMatch[1]) < vbaContract.scheduler.minimumScenarios) {
-      throw new Error(`scheduler scenario count is below ${vbaContract.scheduler.minimumScenarios}`);
+    const scenarioMatch = testSource.match(/Private\s+Const\s+QPS_TEST_SCENARIO_COUNT\s+As\s+Long\s*=\s*(\d+)/i);
+    if (!scenarioMatch || Number(scenarioMatch[1]) !== vbaContract.scheduler.scenarioCount) {
+      throw new Error(`scheduler scenario count must equal ${vbaContract.scheduler.scenarioCount}`);
     }
     pass("VBA scheduler domain boundary and scenario manifest");
   }

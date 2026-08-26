@@ -11,7 +11,7 @@ Excel acceptance пока не реализованы.
 
 | Компонент | Требование |
 | --- | --- |
-| Node.js | ветка `24.x` |
+| Node.js | ветка `26.x` |
 | npm | версия, поставляемая с поддерживаемым Node.js |
 | XLSX engine | публичный `exceljs 4.4.0` |
 | OOXML/ZIP | публичный `jszip 3.10.1` |
@@ -77,7 +77,7 @@ lock-файлы открытых книг.
 - VBA source contracts и нормализованный structural snapshot.
 
 CI выполняет `npm ci`, portable build и static gate на Windows, macOS и Linux под
-Node.js 24.
+Node.js 26.
 
 ## Оставшаяся работа для нативной автоматизации на Mac
 

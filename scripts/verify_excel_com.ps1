@@ -25,6 +25,10 @@ function Resolve-ProjectPath([string]$Path) {
     return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($resolvedPath)
 }
 
+function Normalize-VbaSource([string]$Text) {
+    return (($Text -replace "`r`n", "`n") -replace "`r", "`n").Trim()
+}
+
 function Assert-PlainMacroName([string]$Value, [string]$ShapeName) {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         throw "Shape $ShapeName has empty OnAction"
@@ -145,6 +149,12 @@ if (!(Test-Path -LiteralPath $workbookFullPath)) {
     Write-Fail "Excel COM prerequisites" "Workbook not found: $workbookFullPath"
     exit 1
 }
+$vbaContractPath = Resolve-ProjectPath "contracts\vba.contract.json"
+$vbaContract = Get-Content -LiteralPath $vbaContractPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$schedulerContract = $vbaContract.scheduler
+$schedulerComponentContract = @($vbaContract.components | Where-Object { [string]$_.name -eq [string]$schedulerContract.component })
+if ($schedulerComponentContract.Count -ne 1) { throw "Scheduler component contract is missing or duplicated: $($schedulerContract.component)" }
+$schedulerSourcePath = Resolve-ProjectPath ([string]$schedulerComponentContract[0].source)
 
 $securityKey = "HKCU:\Software\Microsoft\Office\16.0\Excel\Security"
 $accessVbom = $null
@@ -176,6 +186,15 @@ try {
     $components = $workbook.VBProject.VBComponents
     $null = $components.Count
     Write-Pass "VBProject is readable"
+
+    $schedulerComponent = $components.Item([string]$schedulerContract.component)
+    $schedulerModule = $schedulerComponent.CodeModule
+    $embeddedSchedulerSource = $schedulerModule.Lines(1, $schedulerModule.CountOfLines)
+    $expectedSchedulerSource = Get-Content -LiteralPath $schedulerSourcePath -Raw -Encoding UTF8
+    if ((Normalize-VbaSource $embeddedSchedulerSource) -cne (Normalize-VbaSource $expectedSchedulerSource)) {
+        throw "Embedded $($schedulerContract.component) is stale; run npm run sync:vba and rebuild the XLSM"
+    }
+    Write-Pass "embedded scheduler source parity"
 
     $requiredMacros = @(
         "RunQuarterPlanReloadBacklog",
@@ -361,7 +380,6 @@ try {
     }
     Write-Pass "COM sheet 00 team member sync"
 
-    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
     $csvPath = Resolve-ProjectPath "assets\import1.csv"
     $tempDir = Resolve-ProjectPath "outputs\com_acceptance"
     if (Test-Path -LiteralPath $tempDir) {
@@ -658,13 +676,14 @@ try {
         }
     }
 
-    function Set-TeamMemberForScheduleScenario([int]$Row, [string]$Role, [double]$Allocation, [object]$VacationStart = $null, [object]$VacationEnd = $null) {
+    function Set-TeamMemberForScheduleScenario([int]$Row, [string]$Role, [double]$Allocation, [object]$VacationStart = $null, [object]$VacationEnd = $null, [int]$VacationSlot = 1) {
         $teamMembersTable.DataBodyRange.Cells($Row, 1).Value2 = $Role
         $teamMembersTable.DataBodyRange.Cells($Row, 2).Value2 = "$Role $Row"
         $teamMembersTable.DataBodyRange.Cells($Row, 3).Value2 = $Allocation
         if ($null -ne $VacationStart -and $null -ne $VacationEnd) {
-            $teamMembersTable.DataBodyRange.Cells($Row, 4).Value2 = [datetime]$VacationStart
-            $teamMembersTable.DataBodyRange.Cells($Row, 5).Value2 = [datetime]$VacationEnd
+            $vacationStartColumn = switch ($VacationSlot) { 1 { 4 } 2 { 7 } 3 { 10 } default { throw "Vacation slot must be 1, 2, or 3" } }
+            $teamMembersTable.DataBodyRange.Cells($Row, $vacationStartColumn).Value2 = [datetime]$VacationStart
+            $teamMembersTable.DataBodyRange.Cells($Row, $vacationStartColumn + 1).Value2 = [datetime]$VacationEnd
         }
     }
 
@@ -702,6 +721,22 @@ try {
     Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-07") "Ready date waits for analyst vacation without replacement"
 
     Clear-TeamMembersForScheduleScenario
+    Set-TeamMemberForScheduleScenario -Row 1 -Role "Аналитик" -Allocation 1 -VacationStart ([datetime]"2026-04-02") -VacationEnd ([datetime]"2026-04-03") -VacationSlot 2
+    Reset-ActivePlanResourceScenario 2.1
+    $excel.CalculateFull()
+    $excel.Run("RunQuarterPlanRecalculate")
+    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 5 "AN duration includes second vacation pause" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-07") "Ready date waits for second analyst vacation"
+
+    Clear-TeamMembersForScheduleScenario
+    Set-TeamMemberForScheduleScenario -Row 1 -Role "Аналитик" -Allocation 1 -VacationStart ([datetime]"2026-04-02") -VacationEnd ([datetime]"2026-04-03") -VacationSlot 3
+    Reset-ActivePlanResourceScenario 2.1
+    $excel.CalculateFull()
+    $excel.Run("RunQuarterPlanRecalculate")
+    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 5 "AN duration includes third vacation pause" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-07") "Ready date waits for third analyst vacation"
+
+    Clear-TeamMembersForScheduleScenario
     Set-TeamMemberForScheduleScenario 1 "Аналитик" 1 ([datetime]"2026-04-02") ([datetime]"2026-04-03")
     Set-TeamMemberForScheduleScenario 2 "Аналитик" 1
     Reset-ActivePlanResourceScenario 2.1
@@ -709,7 +744,7 @@ try {
     $excel.Run("RunQuarterPlanRecalculate")
     Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 3 "AN duration uses replacement analyst during vacation" 0.0001
     Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-03") "Ready date uses replacement analyst during vacation"
-    Write-Pass "COM sheet 04 allocation and vacation scheduling"
+    Write-Pass "COM sheet 04 allocation and all vacation slots scheduling"
 
     $analyticsFormatFound = $false
     $devFormatFound = $false
