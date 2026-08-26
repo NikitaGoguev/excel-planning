@@ -1,0 +1,585 @@
+Option Explicit
+Option Private Module
+
+
+Public mQuarterPlanUiBusy As Boolean
+Public mQuarterPlanClosing As Boolean
+Public mQuarterPlanActionRunning As Boolean
+Public mTaskEstimateMaxActionRow As Long
+Public mTaskEstimateRefreshStartRow As Long
+Public Const SHEET_QUARTER_SETTINGS As String = "01_Настройки квартала"
+Public Const SHEET_CAPACITY As String = "02_Capacity"
+Public Const SHEET_ESTIMATES As String = "03_Оценка задач"
+Public Const SHEET_QUARTER_PLAN As String = "04_Квартальный план"
+Public Const SHEET_EXPRESS_TEMPLATE As String = "100_Шаблон экспресс оценки"
+Public Const SHEET_REFS As String = "99_Справочники"
+Public Const DESIGN_FONT_NAME As String = "Calibri"
+Public Const DESIGN_FONT_SIZE As Long = 11
+Public Const QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX As String = "qpa_"
+Public Const QUARTER_PLAN_CELL_ACTION_LEGACY_PREFIX As String = "btnQuarterPlanCellAction_"
+Public Const TASK_ESTIMATE_ACTION_SHAPE_PREFIX As String = "tea_"
+Public Const TASK_ESTIMATE_IMPORT_XLSX_SHAPE_NAME As String = "btnTaskImportXlsx"
+Public Const TASK_ESTIMATE_IMPORT_XLSX_CELL As String = "D1"
+Public Const TASK_ESTIMATE_IMPORT_XLSX_RANGE As String = "D1"
+Public Const TASK_ESTIMATE_IMPORT_SHAPE_NAME As String = "btnTaskImportCsv"
+Public Const TASK_ESTIMATE_IMPORT_CELL As String = "D2"
+Public Const TASK_ESTIMATE_IMPORT_RANGE As String = "D2"
+Public Const TASK_ESTIMATE_CLEAR_SHAPE_NAME As String = "btnTaskClearAll"
+Public Const TASK_ESTIMATE_CLEAR_CELL As String = "A2"
+Public Const TASK_ESTIMATE_CLEAR_RANGE As String = "A2:B2"
+Public Const TASK_ESTIMATE_REFRESH_SHAPE_NAME As String = "btnTaskRefresh"
+Public Const TASK_ESTIMATE_REFRESH_CELL As String = "C2"
+Public Const TASK_ESTIMATE_REFRESH_RANGE As String = "C2"
+Public Const TASK_ESTIMATE_EXPORT_SHAPE_NAME As String = "btnTaskExportXlsx"
+Public Const TASK_ESTIMATE_EXPORT_CELL As String = "C1"
+Public Const TASK_ESTIMATE_EXPORT_RANGE As String = "C1"
+Public Const PLAN_COL_ACTION_TO_PLAN As Long = 1
+Public Const PLAN_COL_ACTION_TO_GREY As Long = 2
+Public Const PLAN_COL_ACTION_TO_BACKLOG As Long = 3
+Public Const PLAN_COL_ACTION_UP As Long = 4
+Public Const PLAN_COL_ACTION_DOWN As Long = 5
+Public Const PLAN_COL_DATA_FIRST As Long = 6
+Public Const PLAN_COL_PRIORITY As Long = 6
+Public Const PLAN_COL_AN As Long = 11
+Public Const PLAN_COL_BE As Long = 12
+Public Const PLAN_COL_FE As Long = 13
+Public Const PLAN_COL_QA As Long = 14
+Public Const PLAN_COL_EFFORT As Long = 15
+Public Const PLAN_COL_READY_DATE As Long = 16
+Public Const PLAN_COL_STATUS As Long = 18
+Public Const PLAN_COL_COMMENT As Long = 19
+Public Const PLAN_COL_DATA_LAST As Long = 19
+Public Const PLAN_STATUS_ANALYSIS_READY As String = "Готова аналитика"
+Public Const PLAN_STATUS_DEV_READY As String = "Готова разработка"
+Public Const PLAN_STATUS_BACKEND_READY As String = "Готова разработка (бэк)"
+Public Const PLAN_STATUS_FRONTEND_READY As String = "Готова разработка (фронт)"
+Public Const PLAN_STATUS_RELEASE_READY As String = "Готово к релизу"
+Public Const PLAN_STATUS_PROM As String = "ПРОМ"
+Public Const PLAN_STATUS_DEFERRED As String = "Отложено"
+Public Const PLAN_SHEET_COL_AN_DAYS As Long = 20
+Public Const PLAN_SHEET_COL_DIAGNOSTIC As Long = 32
+Public Const PLAN_TECH_FIRST_COL_LETTER As String = "T"
+Public Const PLAN_TECH_LAST_COL_LETTER As String = "AF"
+Public Const EST_SHEET_COL_ACTION_DECOMPOSE As Long = 1
+Public Const EST_SHEET_COL_ACTION_DELETE As Long = 2
+Public Const EST_SHEET_COL_ACTION_EXPRESS_EXPORT As Long = 13
+Public Const EST_SHEET_COL_TASK_ID As Long = 28
+Public Const EST_SHEET_COL_PARENT_TASK_ID As Long = 29
+Public Const EST_SHEET_COL_LEVEL As Long = 30
+Public Const EST_COL_PRIORITY As Long = 1
+Public Const EST_COL_DIRECTION As Long = 2
+Public Const EST_COL_DESCRIPTION As Long = 3
+Public Const EST_COL_TICKET As Long = 4
+Public Const EST_COL_NOTE As Long = 5
+Public Const EST_COL_AN As Long = 6
+Public Const EST_COL_BE As Long = 7
+Public Const EST_COL_FE As Long = 8
+Public Const EST_COL_QA As Long = 9
+Public Const EST_COL_COMMENT As Long = 10
+Public Const EST_COL_EXPRESS_EXPORT As Long = 11
+Public Const EST_COL_LAST As Long = 11
+Public Const EST_MAX_DECOMPOSITION_LEVEL As Long = 2
+Public Const TASK_DELETE_CHOICE_PROMPT As Long = 0
+Public Const TASK_DELETE_CHOICE_DROP As Long = 1
+Public Const TASK_DELETE_CHOICE_UP As Long = 2
+Public Const TASK_DELETE_CHOICE_DOWN As Long = 3
+Public Const TASK_IMPORT_MODE_PROMPT As Long = -1
+Public Const TASK_IMPORT_MODE_APPEND As Long = 0
+Public Const TASK_IMPORT_MODE_REPLACE As Long = 1
+Public Const TASK_IMPORT_MODE_CANCEL As Long = -2
+Public Const TEAM_MEMBER_COL_ROLE As Long = 1
+Public Const TEAM_MEMBER_COL_NAME As Long = 2
+Public Const TEAM_MEMBER_COL_ALLOCATION As Long = 3
+Public Const TEAM_MEMBER_COL_VACATION1_START As Long = 4
+Public Const TEAM_MEMBER_COL_VACATION1_END As Long = 5
+Public Const TEAM_MEMBER_COL_VACATION1_DAYS As Long = 6
+Public Const TEAM_MEMBER_COL_VACATION2_START As Long = 7
+Public Const TEAM_MEMBER_COL_VACATION2_END As Long = 8
+Public Const TEAM_MEMBER_COL_VACATION2_DAYS As Long = 9
+Public Const TEAM_MEMBER_COL_VACATION3_START As Long = 10
+Public Const TEAM_MEMBER_COL_VACATION3_END As Long = 11
+Public Const TEAM_MEMBER_COL_VACATION3_DAYS As Long = 12
+
+
+Public Sub HandleQuarterPlanShapeAction(ByVal shapeName As String)
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim actionCell As Range
+    Dim normalizedShapeName As String
+    Dim actionHandled As Boolean
+
+    If mQuarterPlanUiBusy Or mQuarterPlanActionRunning Then Exit Sub
+
+    Set ws = GetQuarterPlanWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Quarter plan worksheet not found by tblPlanActive."
+    normalizedShapeName = NormalizeShapeCallerName(shapeName)
+    Set shp = ws.Shapes(normalizedShapeName)
+    Set actionCell = shp.TopLeftCell
+
+    mQuarterPlanActionRunning = True
+    Application.EnableEvents = False
+
+    If actionCell.MergeCells Then Set actionCell = actionCell.MergeArea.Cells(1, 1)
+
+    If actionCell.Address(False, False) = QP_BACKLOG_ACTION_CELL And Trim$(CStr(actionCell.Value)) = QuarterPlanTextAddAllToPlan() Then
+        Application.ScreenUpdating = False
+        RunQuarterPlanAddAllBacklogToPlan
+    ElseIf IsQuarterPlanActionCell(ws, actionCell) Then
+        Application.ScreenUpdating = False
+        actionHandled = HandleQuarterPlanAction(ws, actionCell)
+    End If
+
+SafeExit:
+    Application.ScreenUpdating = True
+    mQuarterPlanActionRunning = False
+    Application.EnableEvents = True
+    Exit Sub
+
+Fail:
+    If Left$(normalizedShapeName, Len(QUARTER_PLAN_CELL_ACTION_LEGACY_PREFIX)) = QUARTER_PLAN_CELL_ACTION_LEGACY_PREFIX Then
+        On Error Resume Next
+        RebuildQuarterPlanActionUi
+        On Error GoTo 0
+        MsgBox "Кнопки действий были созданы старой версией с длинными именами и Excel вернул обрезанное имя." & vbCrLf & _
+            "Интерфейс кнопок пересоздан. Нажмите действие еще раз." & vbCrLf & _
+            "Caller: " & shapeName & vbCrLf & _
+            "Shape: " & normalizedShapeName, vbInformation
+        Resume SafeExit
+    End If
+
+    MsgBox "Ошибка HandleQuarterPlanShapeAction: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Caller: " & shapeName & vbCrLf & _
+        "Shape: " & normalizedShapeName, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Sub HandleTaskEstimateShapeAction(ByVal shapeName As String)
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim actionCell As Range
+    Dim normalizedShapeName As String
+
+    If mQuarterPlanUiBusy Or mQuarterPlanActionRunning Then Exit Sub
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    normalizedShapeName = NormalizeShapeCallerName(shapeName)
+    Set shp = ws.Shapes(normalizedShapeName)
+    Set actionCell = shp.TopLeftCell
+
+    mQuarterPlanActionRunning = True
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    If Not IsTaskEstimateActionCell(ws, actionCell) Then
+        Err.Raise 5, , "Clicked shape is not attached to a valid task estimate action cell: " & actionCell.Address(False, False)
+    End If
+    If HandleTaskEstimateAction(ws, actionCell) Then
+        RefreshTaskEstimateActionGrid
+    End If
+
+SafeExit:
+    Application.ScreenUpdating = True
+    mQuarterPlanActionRunning = False
+    Application.EnableEvents = True
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "HandleTaskEstimateShapeAction: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Caller: " & shapeName & vbCrLf & _
+        "Shape: " & normalizedShapeName, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Function NormalizeShapeCallerName(ByVal callerName As String) As String
+    Dim result As String
+    Dim bangPos As Long
+
+    result = Trim$(callerName)
+    result = Replace(result, "'", "")
+
+    bangPos = InStrRev(result, "!")
+    If bangPos > 0 Then
+        result = Mid$(result, bangPos + 1)
+    End If
+
+    NormalizeShapeCallerName = result
+End Function
+
+Public Function GetQuarterPlanWorksheet() As Worksheet
+    Set GetQuarterPlanWorksheet = FindWorksheetByTableName("tblPlanActive")
+End Function
+
+Public Function GetQuarterSettingsWorksheet() As Worksheet
+    Set GetQuarterSettingsWorksheet = FindWorksheetByTableName("tblHolidays")
+End Function
+
+Public Function GetTaskEstimatesWorksheet() As Worksheet
+    Set GetTaskEstimatesWorksheet = FindWorksheetByTableName("tblTaskEstimates")
+End Function
+
+Public Function GetRefsWorksheet() As Worksheet
+    Set GetRefsWorksheet = FindWorksheetByTableName("tblPlanningRuleSettings")
+End Function
+
+Public Function FindWorksheetByTableName(ByVal tableName As String) As Worksheet
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+
+    For Each ws In ThisWorkbook.Worksheets
+        Set tbl = Nothing
+        On Error Resume Next
+        Set tbl = ws.ListObjects(tableName)
+        On Error GoTo 0
+        If Not tbl Is Nothing Then
+            Set FindWorksheetByTableName = ws
+            Exit Function
+        End If
+    Next ws
+End Function
+
+Public Function WorksheetHasTable(ByVal ws As Worksheet, ByVal tableName As String) As Boolean
+    Dim tbl As ListObject
+
+    If ws Is Nothing Then Exit Function
+    On Error Resume Next
+    Set tbl = ws.ListObjects(tableName)
+    On Error GoTo 0
+    WorksheetHasTable = Not tbl Is Nothing
+End Function
+
+Public Function TaskEstimateTextClearAll() As String
+    TaskEstimateTextClearAll = TextFromCodes(1057, 1073, 1088, 1086, 1089, 1080, 1090, 1100)
+End Function
+
+Public Function TaskEstimateTextRefresh() As String
+    TaskEstimateTextRefresh = TextFromCodes(1054, 1073, 1085, 1086, 1074, 1080, 1090, 1100)
+End Function
+
+Public Function TaskEstimateTextExportXlsx() As String
+    TaskEstimateTextExportXlsx = TextFromCodes(1069, 1082, 1089, 1087, 1086, 1088, 1090)
+End Function
+
+Public Function TaskEstimateTextImportXlsx() As String
+    TaskEstimateTextImportXlsx = TextFromCodes(1048, 1084, 1087, 1086, 1088, 1090)
+End Function
+
+Public Function TaskEstimateTextImportCsvPrefix() As String
+    TaskEstimateTextImportCsvPrefix = TextFromCodes(1048, 1084, 1087, 1086, 1088, 1090, 32, 67, 83, 86, 32, 40, 1076, 1086, 32)
+End Function
+
+Public Function TaskEstimateTextExpressExport() As String
+    TaskEstimateTextExpressExport = TaskEstimateTextExportXlsx()
+End Function
+
+Public Function TaskEstimateHeaderPriority() As String
+    TaskEstimateHeaderPriority = TextFromCodes(1055, 1088, 1080, 1086, 1088, 1080, 1090, 1077, 1090)
+End Function
+
+Public Function TaskEstimateHeaderDirection() As String
+    TaskEstimateHeaderDirection = TextFromCodes(1053, 1072, 1087, 1088, 1072, 1074, 1083, 1077, 1085, 1080, 1077)
+End Function
+
+Public Function TaskEstimateHeaderDescription() As String
+    TaskEstimateHeaderDescription = TextFromCodes(1054, 1087, 1080, 1089, 1072, 1085, 1080, 1077)
+End Function
+
+Public Function TaskEstimateHeaderTicket() As String
+    TaskEstimateHeaderTicket = TextFromCodes(1047, 1053, 1048, 47, 74, 105, 114, 97)
+End Function
+
+Public Function TaskEstimateHeaderNote() As String
+    TaskEstimateHeaderNote = TextFromCodes(1055, 1088, 1080, 1084, 1077, 1095, 1072, 1085, 1080, 1077)
+End Function
+
+Public Function TaskEstimateHeaderComment() As String
+    TaskEstimateHeaderComment = TextFromCodes(1050, 1086, 1084, 1084, 1077, 1085, 1090, 1072, 1088, 1080, 1081)
+End Function
+
+Public Function TaskEstimateVisibleHeaders() As Variant
+    TaskEstimateVisibleHeaders = Array(TaskEstimateHeaderPriority(), TaskEstimateHeaderDirection(), TaskEstimateHeaderDescription(), _
+        TaskEstimateHeaderTicket(), TaskEstimateHeaderNote(), "AN", "BE", "FE", "QA", TaskEstimateHeaderComment(), TaskEstimateTextExportXlsx())
+End Function
+
+Public Function TaskEstimateTextStatistics() As String
+    TaskEstimateTextStatistics = TextFromCodes(1057, 1090, 1072, 1090, 1080, 1089, 1090, 1080, 1082, 1072)
+End Function
+
+Public Function TaskEstimateFilePartQuarter() As String
+    TaskEstimateFilePartQuarter = TextFromCodes(1050, 1074, 1072, 1088, 1090, 1072, 1083)
+End Function
+
+Public Function TaskEstimateFilePartEstimateTasks() As String
+    TaskEstimateFilePartEstimateTasks = TextFromCodes(95, 1086, 1094, 1077, 1085, 1082, 1072, 95, 1079, 1072, 1076, 1072, 1095, 95)
+End Function
+
+Public Function TaskEstimateTextImportTasksCsvTitle() As String
+    TaskEstimateTextImportTasksCsvTitle = TextFromCodes(1048, 1084, 1087, 1086, 1088, 1090, 32, 1079, 1072, 1076, 1072, 1095, 32, 1080, 1079, 32, 67, 83, 86)
+End Function
+
+Public Function TaskEstimateTextImportEstimateTitle() As String
+    TaskEstimateTextImportEstimateTitle = TextFromCodes(1048, 1084, 1087, 1086, 1088, 1090, 32, 1086, 1094, 1077, 1085, 1082, 1080, 32, 1079, 1072, 1076, 1072, 1095)
+End Function
+
+Public Function TaskEstimateTextClearPrompt() As String
+    TaskEstimateTextClearPrompt = TextFromCodes(1054, 1095, 1080, 1089, 1090, 1080, 1090, 1100, 32, 1074, 1089, 1077, 32, 1079, 1072, 1076, 1072, 1095, 1080, 32, 1085, 1072, 32, 1083, 1080, 1089, 1090, 1077, 32, 48, 51, 32, 1074, 1084, 1077, 1089, 1090, 1077, 32, 1089, 32, 1086, 1094, 1077, 1085, 1082, 1072, 1084, 1080, 32, 1080, 32, 1076, 1077, 1082, 1086, 1084, 1087, 1086, 1079, 1080, 1094, 1080, 1077, 1081, 63)
+End Function
+
+Public Function TaskEstimateTextClearTitle() As String
+    TaskEstimateTextClearTitle = TaskEstimateTextClearAll()
+End Function
+
+Public Function TaskEstimateTextExportEstimateTitle() As String
+    TaskEstimateTextExportEstimateTitle = TextFromCodes(1069, 1082, 1089, 1087, 1086, 1088, 1090, 32, 1086, 1094, 1077, 1085, 1082, 1080, 32, 1079, 1072, 1076, 1072, 1095)
+End Function
+
+Public Function TaskEstimateTextFileExistsPrompt() As String
+    TaskEstimateTextFileExistsPrompt = TextFromCodes(1060, 1072, 1081, 1083, 32, 1091, 1078, 1077, 32, 1089, 1091, 1097, 1077, 1089, 1090, 1074, 1091, 1077, 1090, 46, 32, 1055, 1077, 1088, 1077, 1079, 1072, 1087, 1080, 1089, 1072, 1090, 1100, 63)
+End Function
+
+Public Function TaskEstimateTextExportDialogTitle() As String
+    TaskEstimateTextExportDialogTitle = TextFromCodes(1069, 1082, 1089, 1087, 1086, 1088, 1090, 1080, 1088, 1086, 1074, 1072, 1090, 1100)
+End Function
+
+Public Function TaskEstimateTextNoTasksForExport() As String
+    TaskEstimateTextNoTasksForExport = TextFromCodes(1053, 1072, 32, 1083, 1080, 1089, 1090, 1077, 32, 48, 51, 32, 1085, 1077, 1090, 32, 1079, 1072, 1076, 1072, 1095, 32, 1076, 1083, 1103, 32, 1101, 1082, 1089, 1087, 1086, 1088, 1090, 1072, 46)
+End Function
+
+Public Function TaskEstimateTextExportedTasks() As String
+    TaskEstimateTextExportedTasks = TextFromCodes(1069, 1082, 1089, 1087, 1086, 1088, 1090, 1080, 1088, 1086, 1074, 1072, 1085, 1086, 32, 1079, 1072, 1076, 1072, 1095, 58, 32)
+End Function
+
+Public Function TaskEstimateTextImportedTasks() As String
+    TaskEstimateTextImportedTasks = TextFromCodes(1048, 1084, 1087, 1086, 1088, 1090, 1080, 1088, 1086, 1074, 1072, 1085, 1086, 32, 1079, 1072, 1076, 1072, 1095, 58, 32)
+End Function
+
+Public Function TaskEstimateTextSheetName() As String
+    TaskEstimateTextSheetName = TextFromCodes(1054, 1094, 1077, 1085, 1082, 1072, 32, 1079, 1072, 1076, 1072, 1095)
+End Function
+
+Public Function TaskEstimateTextExpressExportTitle() As String
+    TaskEstimateTextExpressExportTitle = TextFromCodes(1069, 1082, 1089, 1087, 1086, 1088, 1090, 32, 1101, 1082, 1089, 1087, 1088, 1077, 1089, 1089, 45, 1086, 1094, 1077, 1085, 1082, 1080)
+End Function
+
+Public Function TaskEstimateTextTask() As String
+    TaskEstimateTextTask = TextFromCodes(1047, 1072, 1076, 1072, 1095, 1072)
+End Function
+
+Public Function TaskEstimateFilePartExpressEstimate() As String
+    TaskEstimateFilePartExpressEstimate = TextFromCodes(32, 1069, 1082, 1089, 1087, 1088, 1077, 1089, 1089, 45, 1086, 1094, 1077, 1085, 1082, 1072, 46, 120, 108, 115, 120)
+End Function
+
+Public Function TaskEstimateTextExpressSheetName() As String
+    TaskEstimateTextExpressSheetName = TextFromCodes(1069, 1082, 1089, 1087, 1088, 1077, 1089, 1089, 32, 1086, 1094, 1077, 1085, 1082, 1072)
+End Function
+
+Public Function TaskEstimateTextExpressExported() As String
+    TaskEstimateTextExpressExported = TextFromCodes(1069, 1082, 1089, 1087, 1088, 1077, 1089, 1089, 45, 1086, 1094, 1077, 1085, 1082, 1072, 32, 1101, 1082, 1089, 1087, 1086, 1088, 1090, 1080, 1088, 1086, 1074, 1072, 1085, 1072, 58)
+End Function
+
+Public Function TaskEstimateCsvHeaderKey() As String
+    TaskEstimateCsvHeaderKey = TextFromCodes(1050, 1083, 1102, 1095, 32, 1079, 1072, 1087, 1088, 1086, 1089, 1072)
+End Function
+
+Public Function TaskEstimateCsvHeaderTheme() As String
+    TaskEstimateCsvHeaderTheme = TextFromCodes(1058, 1077, 1084, 1072)
+End Function
+
+Public Function TaskEstimateTextNoCsvRows() As String
+    TaskEstimateTextNoCsvRows = TextFromCodes(1042, 32, 67, 83, 86, 32, 1085, 1077, 32, 1085, 1072, 1081, 1076, 1077, 1085, 1086, 32, 1089, 1090, 1088, 1086, 1082, 32, 1076, 1083, 1103, 32, 1080, 1084, 1087, 1086, 1088, 1090, 1072, 46)
+End Function
+
+Public Function TaskEstimateTextCsvContainsTasks() As String
+    TaskEstimateTextCsvContainsTasks = TextFromCodes(67, 83, 86, 32, 1089, 1086, 1076, 1077, 1088, 1078, 1080, 1090, 32, 1079, 1072, 1076, 1072, 1095, 58, 32)
+End Function
+
+Public Function TaskEstimateTextTotalRows() As String
+    TaskEstimateTextTotalRows = TextFromCodes(1042, 1089, 1077, 1075, 1086, 32, 1089, 1090, 1088, 1086, 1082, 32, 1085, 1072, 32, 1083, 1080, 1089, 1090, 1077, 32, 48, 51, 58, 32)
+End Function
+
+Public Function TaskEstimateTextFreeRows() As String
+    TaskEstimateTextFreeRows = TextFromCodes(1057, 1074, 1086, 1073, 1086, 1076, 1085, 1086, 32, 1076, 1083, 1103, 32, 1076, 1086, 1073, 1072, 1074, 1083, 1077, 1085, 1080, 1103, 58, 32)
+End Function
+
+Public Function TaskEstimateTextAppendChoice() As String
+    TaskEstimateTextAppendChoice = TextFromCodes(1044, 1072, 32, 8212, 32, 1076, 1086, 1073, 1072, 1074, 1080, 1090, 1100, 32, 1087, 1086, 1089, 1083, 1077, 32, 1087, 1086, 1089, 1083, 1077, 1076, 1085, 1077, 1081, 32, 1079, 1072, 1076, 1072, 1095, 1080, 46)
+End Function
+
+Public Function TaskEstimateTextReplaceChoice() As String
+    TaskEstimateTextReplaceChoice = TextFromCodes(1053, 1077, 1090, 32, 8212, 32, 1091, 1076, 1072, 1083, 1080, 1090, 1100, 32, 1090, 1077, 1082, 1091, 1097, 1080, 1077, 32, 1079, 1072, 1076, 1072, 1095, 1080, 32, 1080, 32, 1074, 1089, 1090, 1072, 1074, 1080, 1090, 1100, 32, 1085, 1086, 1074, 1099, 1081, 32, 1089, 1087, 1080, 1089, 1086, 1082, 46)
+End Function
+
+Public Function TaskEstimateTextCancelChoice() As String
+    TaskEstimateTextCancelChoice = TextFromCodes(1054, 1090, 1084, 1077, 1085, 1072, 32, 8212, 32, 1085, 1080, 1095, 1077, 1075, 1086, 32, 1085, 1077, 32, 1076, 1077, 1083, 1072, 1090, 1100, 46)
+End Function
+
+Public Function TaskEstimateTextImportCsvTitle() As String
+    TaskEstimateTextImportCsvTitle = TextFromCodes(1048, 1084, 1087, 1086, 1088, 1090, 32, 67, 83, 86)
+End Function
+
+Public Function TaskEstimateTextErrorPrefix() As String
+    TaskEstimateTextErrorPrefix = TextFromCodes(1054, 1096, 1080, 1073, 1082, 1072, 32)
+End Function
+
+Public Function TextFromCodes(ParamArray codepoints() As Variant) As String
+    Dim i As Long
+    Dim result As String
+
+    For i = LBound(codepoints) To UBound(codepoints)
+        result = result & ChrW$(CLng(codepoints(i)))
+    Next i
+    TextFromCodes = result
+End Function
+
+Public Function QuarterPlanTextExportBacklog() As String
+    QuarterPlanTextExportBacklog = TextFromCodes(1069, 1082, 1089, 1087, 1086, 1088, 1090, 32, 1087, 1083, 1072, 1085, 1072)
+End Function
+
+Public Function QuarterPlanTextBacklogSheetName() As String
+    QuarterPlanTextBacklogSheetName = TextFromCodes(1055, 1083, 1072, 1085)
+End Function
+
+Public Function QuarterPlanFilePartQuarterlyPlan() As String
+    QuarterPlanFilePartQuarterlyPlan = TextFromCodes(1082, 1074, 1072, 1088, 1090, 1072, 1083, 1100, 1085, 1099, 1081, 32, 1087, 1083, 1072, 1085)
+End Function
+
+Public Function DefaultTaskEstimateExportFileName() As String
+    Dim quarterName As String
+
+    On Error Resume Next
+    quarterName = Trim$(CStr(ThisWorkbook.Worksheets(SHEET_CAPACITY).Range("E3").Value))
+    On Error GoTo 0
+    If quarterName = "" Then quarterName = TaskEstimateFilePartQuarter()
+
+    DefaultTaskEstimateExportFileName = SanitizeFileName(quarterName & TaskEstimateFilePartEstimateTasks() & Format$(Now, "yyyy-mm-dd_hh-nn") & ".xlsx")
+End Function
+
+Public Sub AssertTaskEstimateUnicodeTextForTest()
+    Dim headers As Variant
+    Dim fileName As String
+
+    headers = TaskEstimateVisibleHeaders()
+    If CStr(headers(0)) <> TaskEstimateHeaderPriority() Or CStr(headers(10)) <> TaskEstimateTextExportXlsx() Then
+        Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate header helpers are inconsistent."
+    End If
+    If TaskEstimateTextStatistics() <> TextFromCodes(1057, 1090, 1072, 1090, 1080, 1089, 1090, 1080, 1082, 1072) Then
+        Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate statistics text is inconsistent."
+    End If
+    If TaskEstimateCsvHeaderKey() = "" Or TaskEstimateCsvHeaderTheme() = "" Or TaskEstimateTextClearPrompt() = "" Or TaskEstimateTextImportCsvTitle() = "" Then
+        Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate dialog helpers are empty."
+    End If
+
+    fileName = DefaultTaskEstimateExportFileName()
+    If InStr(1, fileName, TaskEstimateFilePartEstimateTasks(), vbBinaryCompare) = 0 Then
+        Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate default filename has no Unicode-safe estimate suffix: " & fileName
+    End If
+    If LCase$(Right$(fileName, 5)) <> ".xlsx" Then
+        Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate default filename does not end with .xlsx: " & fileName
+    End If
+End Sub
+
+Public Function DefaultQuarterPlanBacklogExportFileName() As String
+    Dim wsSettings As Worksheet
+    Dim teamName As String
+    Dim yearValue As String
+    Dim quarterValue As String
+
+    On Error Resume Next
+    Set wsSettings = FindWorksheetByTableName("tblTeamComposition")
+    If Not wsSettings Is Nothing Then
+        teamName = Trim$(CStr(wsSettings.Range("B4").Value))
+        yearValue = Trim$(CStr(wsSettings.Range("B6").Value))
+        quarterValue = Trim$(CStr(wsSettings.Range("B7").Value))
+    End If
+    On Error GoTo 0
+
+    If teamName = "" Then teamName = "Команда"
+    If yearValue = "" Then yearValue = Format$(Date, "yyyy")
+    If quarterValue = "" Then quarterValue = "Q"
+
+    DefaultQuarterPlanBacklogExportFileName = SanitizeFileName(teamName & "_" & yearValue & "_Q" & quarterValue & "_" & QuarterPlanFilePartQuarterlyPlan() & "_" & Format$(Now, "yyyy-mm-dd_hh-nn") & ".xlsx")
+End Function
+
+Public Sub AssertQuarterPlanBacklogDefaultExportFileNameForTest()
+    Dim fileName As String
+
+    fileName = DefaultQuarterPlanBacklogExportFileName()
+    If Left$(fileName, Len("Atlas_2026_Q2_")) <> "Atlas_2026_Q2_" Then
+        Err.Raise 5, "AssertQuarterPlanBacklogDefaultExportFileNameForTest", "Unexpected backlog export default filename: " & fileName
+    End If
+    If InStr(1, fileName, QuarterPlanFilePartQuarterlyPlan(), vbBinaryCompare) = 0 Then
+        Err.Raise 5, "AssertQuarterPlanBacklogDefaultExportFileNameForTest", "Backlog export default filename does not contain quarterly plan text: " & fileName
+    End If
+    If LCase$(Right$(fileName, 5)) <> ".xlsx" Then
+        Err.Raise 5, "AssertQuarterPlanBacklogDefaultExportFileNameForTest", "Backlog export default filename does not end with .xlsx: " & fileName
+    End If
+End Sub
+
+Public Function EnsureXlsxExtension(ByVal filePath As String) As String
+    If filePath = "" Then Exit Function
+    If LCase$(Right$(filePath, 5)) <> ".xlsx" Then filePath = filePath & ".xlsx"
+    EnsureXlsxExtension = filePath
+End Function
+
+Public Function SanitizeFileName(ByVal fileName As String) As String
+    Dim invalidChars As Variant
+    Dim item As Variant
+
+    invalidChars = Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+    For Each item In invalidChars
+        fileName = Replace(fileName, CStr(item), "_")
+    Next item
+    SanitizeFileName = Trim$(fileName)
+End Function
+
+Public Function QuarterPlanTextAddToPlan() As String
+    QuarterPlanTextAddToPlan = "+"
+End Function
+
+Public Function QuarterPlanTextAddAllToPlan() As String
+    QuarterPlanTextAddAllToPlan = "++"
+End Function
+
+Public Function QuarterPlanTextToGrey() As String
+    QuarterPlanTextToGrey = "\"
+End Function
+
+Public Function QuarterPlanTextToBacklog() As String
+    QuarterPlanTextToBacklog = "-"
+End Function
+
+Public Function QuarterPlanTextMoveUp() As String
+    QuarterPlanTextMoveUp = ChrW$(&H2191)
+End Function
+
+Public Function QuarterPlanTextMoveDown() As String
+    QuarterPlanTextMoveDown = ChrW$(&H2193)
+End Function
+
+Public Function TaskEstimateTextDecompose() As String
+    TaskEstimateTextDecompose = ">"
+End Function
+
+Public Function TaskEstimateTextDeleteDecomposition() As String
+    TaskEstimateTextDeleteDecomposition = "x"
+End Function
+
+Public Function QuarterPlanTextReloadBacklog() As String
+    QuarterPlanTextReloadBacklog = ChrW$(&H417) & ChrW$(&H430) & ChrW$(&H433) & ChrW$(&H440) & ChrW$(&H443) & ChrW$(&H437) & ChrW$(&H438) & ChrW$(&H442) & ChrW$(&H44C) & " 03 " & ChrW$(&H432) & " " & ChrW$(&H431) & ChrW$(&H44D) & ChrW$(&H43A) & ChrW$(&H43B) & ChrW$(&H43E) & ChrW$(&H433)
+End Function
+
+Public Function QuarterPlanTextRecalculatePlan() As String
+    QuarterPlanTextRecalculatePlan = ChrW$(&H41F) & ChrW$(&H43E) & ChrW$(&H441) & ChrW$(&H447) & ChrW$(&H438) & ChrW$(&H442) & ChrW$(&H430) & ChrW$(&H442) & ChrW$(&H44C) & " " & ChrW$(&H43F) & ChrW$(&H43B) & ChrW$(&H430) & ChrW$(&H43D)
+End Function
+
+Public Function QuarterPlanTextReloadConfirm() As String
+    QuarterPlanTextReloadConfirm = ChrW$(&H41E) & ChrW$(&H447) & ChrW$(&H438) & ChrW$(&H441) & ChrW$(&H442) & ChrW$(&H438) & ChrW$(&H442) & ChrW$(&H44C) & " " & ChrW$(&H43B) & ChrW$(&H438) & ChrW$(&H441) & ChrW$(&H442) & " 04 " & ChrW$(&H438) & " " & ChrW$(&H437) & ChrW$(&H430) & ChrW$(&H433) & ChrW$(&H440) & ChrW$(&H443) & ChrW$(&H437) & ChrW$(&H438) & ChrW$(&H442) & ChrW$(&H44C) & " " & ChrW$(&H431) & ChrW$(&H44D) & ChrW$(&H43A) & ChrW$(&H43B) & ChrW$(&H43E) & ChrW$(&H433) & " " & ChrW$(&H438) & ChrW$(&H437) & " " & ChrW$(&H43B) & ChrW$(&H438) & ChrW$(&H441) & ChrW$(&H442) & ChrW$(&H430) & " 03?"
+End Function
+
+Public Function QuarterPlanTextBacklogFull() As String
+    QuarterPlanTextBacklogFull = ChrW$(&H411) & ChrW$(&H44D) & ChrW$(&H43A) & ChrW$(&H43B) & ChrW$(&H43E) & ChrW$(&H433) & " " & ChrW$(&H437) & ChrW$(&H430) & ChrW$(&H43F) & ChrW$(&H43E) & ChrW$(&H43B) & ChrW$(&H43D) & ChrW$(&H435) & ChrW$(&H43D) & ". " & ChrW$(&H41F) & ChrW$(&H440) & ChrW$(&H43E) & ChrW$(&H43F) & ChrW$(&H443) & ChrW$(&H449) & ChrW$(&H435) & ChrW$(&H43D) & ChrW$(&H43E) & " " & ChrW$(&H437) & ChrW$(&H430) & ChrW$(&H434) & ChrW$(&H430) & ChrW$(&H447) & ": "
+End Function

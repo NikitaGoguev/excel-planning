@@ -11,9 +11,10 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 
 1. Edit source files, not generated workbooks:
    - `scripts/build_quarter_planning_step1.mjs`
+   - `src/workbook/`, `src/sheets/`, and `src/ooxml/`
+   - `config/workbook-limits.json`
    - `scripts/create_quarter_planning_xlsm.mjs`
-   - `assets/vba/ThisWorkbook_holiday_macro.txt`
-   - `assets/vba/QuarterPlanActions_module.txt`
+   - VBA sources listed in `contracts/vba.contract.json`
    - `data/test_data_quarter_planning.json`
    - `data/release_blank_quarter_planning.json`
 
@@ -46,6 +47,9 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
    For Windows desktop Excel acceptance, use:
    - `npm run verify:excel`
 
+   For the isolated 32-scenario domain scheduler gate, use:
+   - `npm run verify:scheduler`
+
    For clean public artifacts and the public-data gate, use:
    - `npm run build:release`
    - `npm run verify:release`
@@ -57,6 +61,9 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - Use Node.js 24.x with the locked public `exceljs` and `jszip` dependencies. Do not add personal runtime paths or private bundled packages.
 - Keep XLSX generation and XLSM packaging free of PowerShell, Excel COM, and platform-specific filesystem paths.
 - Never binary-edit `vbaProject.bin`.
+- Treat `config/workbook-limits.json` as the only source for structural capacities. Run `npm run generate:limits`; never hand-edit `QuarterPlanLimits_module.txt`.
+- Keep `ThisWorkbook` limited to events and stable compatibility wrappers. Add/update managed modules through `contracts/vba.contract.json` so Excel sync can preserve document/sheet components.
+- Keep `QuarterPlanScheduler` free of Excel Object Model and UI state; pass only Variant matrices/scalars and test changes with the test-only COM harness.
 - Keep demo data anonymized and build public releases from the clean release profile. Public workbook metadata must identify `QuarterPlan Excel`, not a local Office user or absolute path.
 - Prefer updating VBA source text and resyncing through Excel.
 - Preserve the Excel-saved template and validated `vbaProject.step2.bin`.
@@ -70,7 +77,7 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - Current stable backlog load path uses `RunQuarterPlanReloadBacklog`.
 - Workbook design is contract-enforced: all generated sheets and action shapes use Calibri 11; only headers, section titles, and action/button cells/shapes are bold; generated worksheets must not use custom row heights to make buttons fit.
 - Hidden header dropdowns are contract-enforced for selected ListObject columns: settings/team headers, sheet 00 employee headers, holiday headers, sheet 03 user estimate columns `G:M`, and sheet 04 action/status/comment/resource columns `A:E` and `J:S` across all plan sections.
-- Sheet `00_Настройки` keeps `tblTeamComposition` at `A13:B19`; role comments are merged `C:G` fields outside the table. `tblTeamMembers` stays at `A23:L43` with 3 vacation periods (`с`/`по`/`дней`) and is synchronized by `ThisWorkbook` when team role counts change.
+- Sheet `00_Настройки` keeps `tblTeamComposition` at `A13:B19`; `tblTeamMembers` starts at `A23:L23`, and its data-row capacity comes from `teamMembers` (default range `A23:L43`).
 - When synchronizing `tblTeamMembers`, write only editable columns and leave the three builder-provided vacation-day calculated columns untouched. Do not reassign `.FormulaR1C1` across those full columns: Excel 2016 can fail with error `1004`. The COM gate covers `Тестировщик` changing from `3` to `2` and verifies that the existing formula text is preserved.
 - Sheet `02_Capacity!E8:E19` are effective team counts and vacation person-days for downstream capacity and resource-balance formulas; `F8:F13` auto-calculate counts from sheet 00 allocations, `F14:F19` auto-calculate weighted vacation person-days from sheet 00 vacations and allocations, and `G8:G19` are manual overrides.
 - All visible workbook dates must display as `ДД-ММ-ГГГГ`. In the JS workbook builder, use `dd-mm-yyyy` so the generated XLSX style stays a real date format. In Excel COM formatting code, use `NumberFormatLocal = "ДД-ММ-ГГГГ"`. In VBA, assign the existing Unicode-safe `DateFormatLocalText()` result to `NumberFormatLocal`; a raw Cyrillic VBA format literal is corrupted when the project is opened on Mac. Russian desktop Excel treats `dd-mm-yyyy` assigned through COM/VBA as literal text. Do not introduce `yyyy-mm-dd` formats or hardcoded style ids that can display dates as serial numbers.
@@ -80,17 +87,17 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - `04_Квартальный план` technical schedule columns `T:AF` are user-visible and must not be hidden; they show AN/BE/FE/QA durations, dates, and diagnostics.
 - `RunQuarterPlanRecalculate` schedules dates from `00_Настройки!tblTeamMembers`, not from aggregate/manual override capacity values. Manual overrides on `02_Capacity!G8:G19` still affect capacity/balance formulas, but the per-day calendar uses actual employees, allocation percentages, and vacation ranges.
 - Sheet 04 scheduling uses one available employee per stage per working day. Daily progress is `Аллокация * 02_Capacity!E20`; full-day vacation ranges block that employee, and another employee with the same expertise may continue the remaining work.
-- `04_Квартальный план!tblPlanBacklog` is a fixed 100-row table at `A55:S155`, with bulk action `++` in `A54`; keep sheet 04 backlog capacity aligned with the 100-row template on `03_Оценка задач`.
+- Default ranges remain `tblTaskEstimates=C3:M103`, `tblPlanBacklog=A55:S155`, and bulk action `A54`, but they are derived from `taskRows`; never duplicate these literals in builder, handwritten VBA, or verifiers.
 - On workbook open, `04_Квартальный план` recreates shape buttons over `G2` and `P2` and binds them to those public macros.
 - On workbook open, `03_Оценка задач` refreshes decomposition action cells. Shape buttons over populated action cells are recreated on sheet activation and by `RunTaskEstimateRepairActionButtons`, using the same shape-backed public-macro pattern as `04_Квартальный план`; this avoids Excel activation crashes from pre-created shapes on sheet 03.
-- Sheet `03_Оценка задач` uses a fixed `100`-row template. `tblTaskEstimates` spans `C3:M103`.
+- The sheet 03 template row count and CSV caption derive from `taskRows`; changing the config requires rebuild, Excel VBA sync and COM verification.
 - `03_Оценка задач!M3` is `Экспорт`; `M4:M103` contains shape-backed per-root express-estimate export actions. `Примечание` is a visible user field in column `G`.
-- The top action layout on sheet 03 is fixed: `A2:B2` = `Сбросить`, `C1` = `Экспорт`, `C2` = `Обновить`, `D1` = `Импорт`, `D2` = `Импорт CSV (до 100)`, `E1` = title `Оценка задач`.
+- The top action layout on sheet 03 is fixed, but `D2` uses dynamic caption `Импорт CSV (до <taskRows>)`.
 - `03_Оценка задач!H1:K1` is a merged `Статистика` title block; `H2:K2` must contain formula-driven totals for `AN`, `BE`, `FE`, and `QA` based on `tblTaskEstimates`.
 - `03_Оценка задач!D1` is a shape-backed XLSX import button with caption `Импорт`. It imports files created by the sheet 03 `Экспорт` button, restores hierarchy from description indentation, and always appends after the last task/subtree.
-- `03_Оценка задач!D2` is a shape-backed CSV import button with caption `Импорт CSV (до 100)`. It imports UTF-8 comma-delimited CSV files by headers only: `Ключ запроса` maps to `ЗНИ/Jira`, and `Тема` maps to `Описание`. Use `assets/import1.csv` as the canonical sample file for quick manual/COM import checks.
+- `03_Оценка задач!D2` is a shape-backed CSV import button whose limit comes from `taskRows`. It imports UTF-8 comma-delimited CSV files by headers only; use `assets/import1.csv` for checks.
 - `03_Оценка задач!A2:B2` is a shape-backed `Сбросить` button that confirms before clearing the task estimate table, action cells, and technical decomposition fields.
-- `03_Оценка задач!A2:B2` and `C2` must restore the fixed `100`-row task template if the user manually deleted worksheet rows and `tblTaskEstimates` no longer reaches row `103`.
+- `03_Оценка задач!A2:B2` and `C2` must restore the configured task range if worksheet rows were manually deleted.
 - `03_Оценка задач!C2` is a shape-backed `Обновить` button and is the normal user path for refreshing `>`/`x`, parent formulas, and row-action shapes after manual edits.
 - `03_Оценка задач!C1` is a shape-backed `Экспорт` button that exports visible user columns `C:M` to standalone `.xlsx`; parent estimates must be values, not formulas.
 - Root-row `M` export actions must use the visible sheet `100_Шаблон экспресс оценки`, copied from `assets/Шаблон Экспресс оценки.xlsx` and placed after `99_Справочники`, to create `<ЗНИ/Jira> Экспресс-оценка.xlsx`. Fill `E2:K2` with the root ticket, `E3:K3` with the root description, and write root/child/grandchild rows from row 17 using description merges `A:D`, `B:D`, `C:D` and estimates `AN/BE/FE/QA` in `G/I/J/K`; leave `Design` blank.
@@ -104,7 +111,7 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - Sheet `03_Оценка задач` uses compact shape-backed captions `>` to create a decomposition child, `x` to delete a decomposed row/subtree, and `Экспорт` in root rows to export the express-estimate template. Delete must show a modal choice to drop estimates, transfer up, or transfer down; transfer uses same-level siblings with parent fallback for child/grandchild when the selected direction has no sibling.
 - Generate every Cyrillic string written or compared by the sheet 03 VBA flow through `TextFromCodes()`: action captions, restored table/statistics headers, export sheet names and filename parts, XLSX/CSV header matching, and import/export/reset dialogs. Raw Cyrillic VBA literals can become mojibake in Excel 2016 or across platforms. Export and import must share the same header helper array; the COM gate corrupts and rebuilds the headers, checks the default filename helper, validates the exported headers, and imports that exported file back.
 - Sheet 03 CSV import must use the project pure-VBA parser and `Application.GetOpenFilename`; avoid `FileDialog`, QueryTables, Power Query, `OpenText`, ActiveX, and `CreateObject`. Append imports after the last task/subtree; replace clears the whole task estimate table and technical fields first. If CSV rows exceed available capacity, show a modal error and leave the workbook unchanged.
-- The bulk backlog action `++` is implemented as a separate top-level cell in `A54`, not as a row action inside the backlog table. The builder must write `++` into `A54`; VBA recreates a shape over it on open/refresh.
+- The bulk backlog action `++` is a separate top-level cell derived by the layout resolver (default `A54`); VBA uses the generated constant.
 - `+`, `\`, `-`, `↑`, `↓`, and `++` should use stable public macros from the standard module through shape `OnAction`, with cell-event handlers kept only as fallback for direct cell selection.
 - Shape `OnAction` values should be plain public macro names, not workbook-qualified names and not macro calls with arguments, to avoid Mac Excel failures and silent row-button creation failures.
 - Row action shapes should call `RunQuarterPlanCellAction`; the handler should resolve the clicked shape through `Application.Caller` and then use `TopLeftCell` for the action cell.
@@ -121,4 +128,4 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - Cell-action handlers should refresh action shapes in place after successful moves and should not select `D2` or another distant cell, because that causes visible jumps on Mac.
 - The `++` action must use a batched move implementation instead of row-by-row compact/refresh loops.
 - Keep workbook automation conservative on Mac; avoid heavy actions from selection events, `Application.OnTime`, or old `ThisWorkbook` methods with long `ByRef` argument lists.
-- `tblTaskEstimates` must stay at `03_Оценка задач!C3:M103`; decomposition action cells live in `A:B`, root express-export actions live in `M`, and VBA maintains `_TaskId`, `_ParentTaskId`, and `_Level` outside the ListObject. Parent estimate cells must contain formula-backed direct-child sums with a grey calculated style; leaf rows keep the yellow input style. Loading from sheet 03 to sheet 04 must include only root tasks; decomposed root estimates are calculated from leaf descendants.
+- `tblTaskEstimates` must start at `03_Оценка задач!C3:M3` and end at the row resolved from `taskRows`; loading to sheet 04 includes only roots and aggregates leaf descendants.

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
+import { deriveWorkbookLayout, loadWorkbookLimits } from "../src/config/workbook-limits.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
@@ -13,6 +14,7 @@ const releaseVersion = String(process.env.RELEASE_VERSION || packageJson.version
 const distDir = path.join(repoRoot, "dist");
 const xlsxPath = path.join(distDir, `QuarterPlan-Excel-v${releaseVersion}-no-macros.xlsx`);
 const xlsmPath = path.join(distDir, `QuarterPlan-Excel-v${releaseVersion}.xlsm`);
+const layout = deriveWorkbookLayout(await loadWorkbookLimits());
 
 const forbiddenPatterns = [
   new RegExp(["gaz", "prombank"].join(""), "iu"),
@@ -90,13 +92,13 @@ for (const cell of ["B4", "B5", "B6", "B7"]) {
   const value = settings.getCell(cell).value;
   if (value !== null && value !== "") throw new Error(`Release setting ${cell} is not blank: ${value}`);
 }
-for (let row = 4; row <= 103; row += 1) {
+for (let row = layout.taskEstimates.dataStartRow; row <= layout.taskEstimates.dataEndRow; row += 1) {
   for (let column = 3; column <= 12; column += 1) {
     const value = estimates.getCell(row, column).value;
     if (value !== null && value !== "") throw new Error(`Release estimate cell ${estimates.getCell(row, column).address} is not blank`);
   }
 }
-for (let row = 56; row <= 155; row += 1) {
+for (let row = layout.backlog.dataStartRow; row <= layout.backlog.dataEndRow; row += 1) {
   const value = plan.getCell(row, 8).value;
   if (value !== null && value !== "") throw new Error(`Release backlog description H${row} is not blank`);
 }

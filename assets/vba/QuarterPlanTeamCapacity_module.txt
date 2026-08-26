@@ -1,0 +1,241 @@
+Option Explicit
+Option Private Module
+
+Public Function IsTeamCompositionCountTarget(ByVal ws As Worksheet, ByVal Target As Range) As Boolean
+    Dim tbl As ListObject
+    Dim countRange As Range
+
+    If ws Is Nothing Then Exit Function
+    If Target Is Nothing Then Exit Function
+
+    Set tbl = ws.ListObjects("tblTeamComposition")
+    If tbl Is Nothing Then Exit Function
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+
+    Set countRange = tbl.ListColumns(2).DataBodyRange
+    IsTeamCompositionCountTarget = Not Intersect(Target, countRange) Is Nothing
+End Function
+
+Public Sub SyncTeamMembersFromComposition(ByVal ws As Worksheet)
+    Dim compositionTbl As ListObject
+    Dim membersTbl As ListObject
+    Dim oldValues As Variant
+    Dim newValues() As Variant
+    Dim usedRows() As Boolean
+    Dim memberRows As Long
+    Dim memberCols As Long
+    Dim roleRow As Long
+    Dim roleText As String
+    Dim roleCount As Long
+    Dim roleMemberIndex As Long
+    Dim outputRow As Long
+    Dim matchedRow As Long
+    Dim colIndex As Long
+    Dim syncStep As String
+
+    On Error GoTo Fail
+
+    syncStep = "resolve tables"
+    Set compositionTbl = ws.ListObjects("tblTeamComposition")
+    Set membersTbl = ws.ListObjects("tblTeamMembers")
+    If compositionTbl Is Nothing Then Err.Raise 9, , "tblTeamComposition not found."
+    If membersTbl Is Nothing Then Err.Raise 9, , "tblTeamMembers not found."
+    If compositionTbl.DataBodyRange Is Nothing Then Exit Sub
+    If membersTbl.DataBodyRange Is Nothing Then Exit Sub
+
+    memberRows = membersTbl.DataBodyRange.Rows.Count
+    memberCols = membersTbl.DataBodyRange.Columns.Count
+    oldValues = membersTbl.DataBodyRange.Value
+    ReDim newValues(1 To memberRows, 1 To memberCols)
+    ReDim usedRows(1 To memberRows)
+
+    outputRow = 0
+    For roleRow = 1 To compositionTbl.DataBodyRange.Rows.Count
+        roleText = Trim$(CStr(compositionTbl.DataBodyRange.Cells(roleRow, 1).Value))
+        roleCount = TeamMemberCountFromValue(compositionTbl.DataBodyRange.Cells(roleRow, 2).Value)
+        If roleText <> "" And roleCount > 0 Then
+            For roleMemberIndex = 1 To roleCount
+                If outputRow >= memberRows Then Exit For
+                outputRow = outputRow + 1
+                newValues(outputRow, TEAM_MEMBER_COL_ROLE) = roleText
+                matchedRow = FindReusableTeamMemberRow(oldValues, usedRows, roleText)
+                If matchedRow > 0 Then
+                    For colIndex = TEAM_MEMBER_COL_NAME To memberCols
+                        If Not IsTeamMemberCalculatedColumn(colIndex) Then
+                            newValues(outputRow, colIndex) = oldValues(matchedRow, colIndex)
+                        End If
+                    Next colIndex
+                    If Trim$(CStr(newValues(outputRow, TEAM_MEMBER_COL_NAME))) = "" Then
+                        newValues(outputRow, TEAM_MEMBER_COL_NAME) = roleText & " " & CStr(roleMemberIndex)
+                    End If
+                    If Trim$(CStr(newValues(outputRow, TEAM_MEMBER_COL_ALLOCATION))) = "" Then
+                        newValues(outputRow, TEAM_MEMBER_COL_ALLOCATION) = 1
+                    End If
+                Else
+                    newValues(outputRow, TEAM_MEMBER_COL_NAME) = roleText & " " & CStr(roleMemberIndex)
+                    newValues(outputRow, TEAM_MEMBER_COL_ALLOCATION) = 1
+                End If
+            Next roleMemberIndex
+        End If
+    Next roleRow
+
+    syncStep = "write editable member values"
+    WriteTeamMemberEditableValues membersTbl, newValues, memberRows
+    syncStep = "format allocation"
+    membersTbl.ListColumns(TEAM_MEMBER_COL_ALLOCATION).DataBodyRange.NumberFormat = "0%"
+    syncStep = "format vacation dates"
+    ApplyDateFormat ws.Range("D" & QP_TEAM_MEMBER_FIRST_ROW & ":E" & QP_TEAM_MEMBER_LAST_ROW)
+    ApplyDateFormat ws.Range("G" & QP_TEAM_MEMBER_FIRST_ROW & ":H" & QP_TEAM_MEMBER_LAST_ROW)
+    ApplyDateFormat ws.Range("J" & QP_TEAM_MEMBER_FIRST_ROW & ":K" & QP_TEAM_MEMBER_LAST_ROW)
+    Exit Sub
+
+Fail:
+    Err.Raise Err.Number, "SyncTeamMembersFromComposition", "Step=" & syncStep & ": " & Err.Description
+End Sub
+
+Public Function IsTeamMemberCalculatedColumn(ByVal columnIndex As Long) As Boolean
+    IsTeamMemberCalculatedColumn = (columnIndex = TEAM_MEMBER_COL_VACATION1_DAYS Or _
+        columnIndex = TEAM_MEMBER_COL_VACATION2_DAYS Or _
+        columnIndex = TEAM_MEMBER_COL_VACATION3_DAYS)
+End Function
+
+Public Sub WriteTeamMemberEditableValues(ByVal membersTbl As ListObject, ByRef values() As Variant, ByVal rowCount As Long)
+    Dim coreValues() As Variant
+    Dim vacation1Values() As Variant
+    Dim vacation2Values() As Variant
+    Dim vacation3Values() As Variant
+    Dim rowIndex As Long
+
+    ReDim coreValues(1 To rowCount, 1 To 3)
+    ReDim vacation1Values(1 To rowCount, 1 To 2)
+    ReDim vacation2Values(1 To rowCount, 1 To 2)
+    ReDim vacation3Values(1 To rowCount, 1 To 2)
+
+    For rowIndex = 1 To rowCount
+        coreValues(rowIndex, 1) = values(rowIndex, TEAM_MEMBER_COL_ROLE)
+        coreValues(rowIndex, 2) = values(rowIndex, TEAM_MEMBER_COL_NAME)
+        coreValues(rowIndex, 3) = values(rowIndex, TEAM_MEMBER_COL_ALLOCATION)
+        vacation1Values(rowIndex, 1) = values(rowIndex, TEAM_MEMBER_COL_VACATION1_START)
+        vacation1Values(rowIndex, 2) = values(rowIndex, TEAM_MEMBER_COL_VACATION1_END)
+        vacation2Values(rowIndex, 1) = values(rowIndex, TEAM_MEMBER_COL_VACATION2_START)
+        vacation2Values(rowIndex, 2) = values(rowIndex, TEAM_MEMBER_COL_VACATION2_END)
+        vacation3Values(rowIndex, 1) = values(rowIndex, TEAM_MEMBER_COL_VACATION3_START)
+        vacation3Values(rowIndex, 2) = values(rowIndex, TEAM_MEMBER_COL_VACATION3_END)
+    Next rowIndex
+
+    membersTbl.DataBodyRange.Cells(1, TEAM_MEMBER_COL_ROLE).Resize(rowCount, 3).Value2 = coreValues
+    membersTbl.DataBodyRange.Cells(1, TEAM_MEMBER_COL_VACATION1_START).Resize(rowCount, 2).Value2 = vacation1Values
+    membersTbl.DataBodyRange.Cells(1, TEAM_MEMBER_COL_VACATION2_START).Resize(rowCount, 2).Value2 = vacation2Values
+    membersTbl.DataBodyRange.Cells(1, TEAM_MEMBER_COL_VACATION3_START).Resize(rowCount, 2).Value2 = vacation3Values
+End Sub
+
+Public Function TeamMemberCountFromValue(ByVal rawValue As Variant) As Long
+    If IsNumeric(rawValue) Then
+        TeamMemberCountFromValue = CLng(Fix(CDbl(rawValue)))
+        If TeamMemberCountFromValue < 0 Then TeamMemberCountFromValue = 0
+        If TeamMemberCountFromValue > QP_TEAM_MEMBER_ROWS Then TeamMemberCountFromValue = QP_TEAM_MEMBER_ROWS
+    End If
+End Function
+
+Public Function FindReusableTeamMemberRow(ByRef oldValues As Variant, ByRef usedRows() As Boolean, ByVal roleText As String) As Long
+    Dim rowIndex As Long
+
+    For rowIndex = LBound(oldValues, 1) To UBound(oldValues, 1)
+        If Not usedRows(rowIndex) Then
+            If Trim$(CStr(oldValues(rowIndex, TEAM_MEMBER_COL_ROLE))) = roleText Then
+                usedRows(rowIndex) = True
+                FindReusableTeamMemberRow = rowIndex
+                Exit Function
+            End If
+        End If
+    Next rowIndex
+End Function
+
+Public Sub RefreshQuarterHolidays(ByVal ws As Worksheet)
+    Dim startDate As Variant
+    Dim endDate As Variant
+    Dim workingDays As Variant
+    Dim calendarWeekdays As Long
+    Dim holidayCount As Long
+    Dim tbl As ListObject
+    Dim oldLastRow As Long
+    Dim clearLastRow As Long
+    Dim targetLastRow As Long
+    Dim i As Long
+    Dim yesText As String
+
+    startDate = ws.Range("B4").Value
+    endDate = ws.Range("B5").Value
+    workingDays = ws.Range("B6").Value
+
+    Set tbl = ws.ListObjects("tblHolidays")
+    ws.Range("B7:B8").NumberFormat = "0"
+
+    oldLastRow = tbl.Range.Row + tbl.Range.Rows.Count - 1
+    clearLastRow = Application.WorksheetFunction.Max(oldLastRow, 33)
+    ws.Range("A14:D" & clearLastRow).ClearContents
+
+    If Not IsDate(startDate) Or Not IsDate(endDate) Or Not IsNumeric(workingDays) Then
+        ws.Range("B7:B8").ClearContents
+        tbl.Resize ws.Range("A13:D14")
+        ApplyHolidayTableFormatting tbl
+        Exit Sub
+    End If
+
+    calendarWeekdays = Application.WorksheetFunction.NetworkDays(CDate(startDate), CDate(endDate))
+    holidayCount = Application.WorksheetFunction.Max(0, calendarWeekdays - CLng(workingDays))
+
+    ws.Range("B7").Value = calendarWeekdays
+    ws.Range("B8").Value = holidayCount
+
+    If holidayCount = 0 Then
+        tbl.Resize ws.Range("A13:D14")
+        ApplyHolidayTableFormatting tbl
+        Exit Sub
+    End If
+
+    targetLastRow = 13 + holidayCount
+    tbl.Resize ws.Range("A13:D" & targetLastRow)
+    ApplyHolidayTableFormatting tbl
+
+    yesText = ChrW$(&H414) & ChrW$(&H430)
+
+    For i = 1 To holidayCount
+        tbl.DataBodyRange.Cells(i, 1).Value = Application.WorksheetFunction.WorkDay(CDate(startDate) - 1, i)
+        tbl.DataBodyRange.Cells(i, 2).ClearContents
+        tbl.DataBodyRange.Cells(i, 3).ClearContents
+        tbl.DataBodyRange.Cells(i, 4).Value = yesText
+    Next i
+
+    ApplyDateFormat tbl.ListColumns(1).DataBodyRange
+End Sub
+
+Public Sub ApplyHolidayTableFormatting(ByVal tbl As ListObject)
+    Dim rowHeight As Double
+    Dim yesText As String
+    Dim noText As String
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    yesText = ChrW$(&H414) & ChrW$(&H430)
+    noText = ChrW$(&H41D) & ChrW$(&H435) & ChrW$(&H442)
+
+    rowHeight = tbl.DataBodyRange.Rows(1).RowHeight
+
+    tbl.DataBodyRange.Rows(1).Copy
+    tbl.DataBodyRange.PasteSpecial Paste:=xlPasteFormats
+    Application.CutCopyMode = False
+
+    tbl.DataBodyRange.RowHeight = rowHeight
+    ApplyDateFormat tbl.ListColumns(1).DataBodyRange
+    tbl.ListColumns(2).DataBodyRange.WrapText = True
+    tbl.ListColumns(3).DataBodyRange.WrapText = True
+    tbl.ListColumns(4).DataBodyRange.HorizontalAlignment = xlCenter
+
+    With tbl.ListColumns(4).DataBodyRange.Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:=yesText & "," & noText
+        .IgnoreBlank = True
+        .InCellDropdown = True
+    End With
+End Sub

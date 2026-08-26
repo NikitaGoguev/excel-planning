@@ -1,7 +1,6 @@
 param(
     [string]$WorkbookPath = "outputs\quarter_planning_step2.xlsm",
-    [string]$SourcePath = "assets\vba\ThisWorkbook_holiday_macro.txt",
-    [string]$ActionModuleSourcePath = "assets\vba\QuarterPlanActions_module.txt",
+    [string]$ContractPath = "contracts\vba.contract.json",
     [string]$VbaProjectPath = "assets\vba\vbaProject.step2.bin",
     [string]$TemplatePath = "assets\vba\quarter_planning_macro_template.xlsm"
 )
@@ -17,19 +16,26 @@ function Resolve-ProjectPath([string]$Path) {
 }
 
 $workbookFullPath = Resolve-ProjectPath $WorkbookPath
-$sourceFullPath = Resolve-ProjectPath $SourcePath
-$actionModuleSourceFullPath = Resolve-ProjectPath $ActionModuleSourcePath
+$contractFullPath = Resolve-ProjectPath $ContractPath
 $vbaProjectFullPath = Resolve-ProjectPath $VbaProjectPath
 $templateFullPath = Resolve-ProjectPath $TemplatePath
 
 if (!(Test-Path -LiteralPath $workbookFullPath)) {
     throw "Workbook not found: $workbookFullPath"
 }
-if (!(Test-Path -LiteralPath $sourceFullPath)) {
-    throw "VBA source not found: $sourceFullPath"
-}
-if (!(Test-Path -LiteralPath $actionModuleSourceFullPath)) {
-    throw "Action module source not found: $actionModuleSourceFullPath"
+if (!(Test-Path -LiteralPath $contractFullPath)) { throw "VBA contract not found: $contractFullPath" }
+
+$nodeExecutable = $env:QUARTER_PLANNING_NODE_EXECUTABLE
+if ([string]::IsNullOrWhiteSpace($nodeExecutable)) { $nodeExecutable = "node" }
+& $nodeExecutable ".\scripts\generate_vba_limits.mjs" "--check"
+if ($LASTEXITCODE -ne 0) { throw "Generated VBA limits are stale; run npm run generate:limits" }
+
+$vbaContract = Get-Content -LiteralPath $contractFullPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$components = @($vbaContract.components)
+if ($components.Count -eq 0) { throw "VBA component manifest is empty" }
+foreach ($item in $components) {
+    $item | Add-Member -NotePropertyName FullSourcePath -NotePropertyValue (Resolve-ProjectPath ([string]$item.source))
+    if (!(Test-Path -LiteralPath $item.FullSourcePath)) { throw "VBA source not found: $($item.FullSourcePath)" }
 }
 
 $securityKey = "HKCU:\Software\Microsoft\Office\16.0\Excel\Security"
@@ -53,30 +59,28 @@ try {
         throw "Workbook has no VBA project: $workbookFullPath"
     }
 
-    $component = $workbook.VBProject.VBComponents.Item("ThisWorkbook")
-    $codeModule = $component.CodeModule
-    if ($codeModule.CountOfLines -gt 0) {
-        $codeModule.DeleteLines(1, $codeModule.CountOfLines)
+    $expectedStandardModules = @($components | Where-Object { $_.type -eq "standard" } | ForEach-Object { [string]$_.name })
+    $staleComponents = @()
+    foreach ($existing in @($workbook.VBProject.VBComponents)) {
+        if ([int]$existing.Type -eq 1 -and [string]$existing.Name -like "QuarterPlan*" -and $expectedStandardModules -notcontains [string]$existing.Name) {
+            $staleComponents += $existing
+        }
     }
+    foreach ($stale in $staleComponents) { $workbook.VBProject.VBComponents.Remove($stale) }
 
-    $source = Get-Content -LiteralPath $sourceFullPath -Raw -Encoding UTF8
-    $codeModule.AddFromString($source)
-
-    $actionComponent = $null
-    try {
-        $actionComponent = $workbook.VBProject.VBComponents.Item("QuarterPlanActions")
-    } catch {
-        $actionComponent = $workbook.VBProject.VBComponents.Add(1)
-        $actionComponent.Name = "QuarterPlanActions"
+    foreach ($item in $components) {
+        $component = $null
+        try { $component = $workbook.VBProject.VBComponents.Item([string]$item.name) } catch {}
+        if ($null -eq $component) {
+            if ($item.type -ne "standard") { throw "Document VBA component not found: $($item.name)" }
+            $component = $workbook.VBProject.VBComponents.Add(1)
+            $component.Name = [string]$item.name
+        }
+        $codeModule = $component.CodeModule
+        if ($codeModule.CountOfLines -gt 0) { $codeModule.DeleteLines(1, $codeModule.CountOfLines) }
+        $source = Get-Content -LiteralPath $item.FullSourcePath -Raw -Encoding UTF8
+        $codeModule.AddFromString($source)
     }
-
-    $actionCodeModule = $actionComponent.CodeModule
-    if ($actionCodeModule.CountOfLines -gt 0) {
-        $actionCodeModule.DeleteLines(1, $actionCodeModule.CountOfLines)
-    }
-
-    $actionSource = Get-Content -LiteralPath $actionModuleSourceFullPath -Raw -Encoding UTF8
-    $actionCodeModule.AddFromString($actionSource)
 
     $workbook.Save()
     $workbook.Close($false)
@@ -96,10 +100,6 @@ try {
 
 Copy-Item -LiteralPath $workbookFullPath -Destination $templateFullPath -Force
 
-$nodeExecutable = $env:QUARTER_PLANNING_NODE_EXECUTABLE
-if ([string]::IsNullOrWhiteSpace($nodeExecutable)) {
-    $nodeExecutable = "node"
-}
 & $nodeExecutable ".\scripts\sanitize_workbook_metadata.mjs" $workbookFullPath $templateFullPath
 if ($LASTEXITCODE -ne 0) {
     throw "sanitize_workbook_metadata.mjs failed"
@@ -131,6 +131,6 @@ try {
     $zip.Dispose()
 }
 
-Write-Host "SYNCED $sourceFullPath -> $workbookFullPath"
+Write-Host "SYNCED $($components.Count) VBA components -> $workbookFullPath"
 Write-Host "UPDATED $vbaProjectFullPath"
 Write-Host "UPDATED $templateFullPath"

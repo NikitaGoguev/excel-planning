@@ -4,6 +4,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$nodeExecutable = if ($env:QUARTER_PLANNING_NODE_EXECUTABLE) { $env:QUARTER_PLANNING_NODE_EXECUTABLE } else { "node" }
+$layoutJson = & $nodeExecutable (Join-Path $PSScriptRoot "print_workbook_layout.mjs")
+if ($LASTEXITCODE -ne 0) { throw "Could not resolve workbook layout" }
+$workbookLayout = $layoutJson | ConvertFrom-Json
+
 function Write-Pass([string]$Name) {
     Write-Host "PASS $Name"
 }
@@ -217,23 +222,34 @@ try {
         throw "tblTeamComposition range is $($teamCompositionTable.Range.Address($false, $false))"
     }
     $teamMembersTable = $settingsSheet.ListObjects("tblTeamMembers")
-    if ($teamMembersTable.Range.Address($false, $false) -ne "A23:L43") {
+    if ($teamMembersTable.Range.Address($false, $false) -ne $workbookLayout.teamMembers.tableRange) {
         throw "tblTeamMembers range is $($teamMembersTable.Range.Address($false, $false))"
     }
     $holidayTable = $quarterSheet.ListObjects("tblHolidays")
+    if ($holidayTable.Range.Row -ne [int]$workbookLayout.holidays.headerRow -or $holidayTable.Range.Rows.Count -gt ([int]$workbookLayout.limits.holidayRows + 1)) {
+        throw "tblHolidays active range is outside configured holiday capacity: $($holidayTable.Range.Address($false, $false))"
+    }
     Assert-LocalDateFormat $quarterSheet.Range("B4") "Quarter start date"
     Assert-LocalDateFormat $quarterSheet.Range("B5") "Quarter end date"
     Assert-LocalDateFormat $holidayTable.DataBodyRange.Cells(1, 1) "Holiday date"
     Write-Pass "COM local date formats"
     $estimateTable = $estimateSheet.ListObjects("tblTaskEstimates")
-    if ($estimateTable.Range.Address($false, $false) -ne "C3:M103") {
+    if ($estimateTable.Range.Address($false, $false) -ne $workbookLayout.taskEstimates.tableRange) {
         throw "tblTaskEstimates range is $($estimateTable.Range.Address($false, $false))"
     }
     $backlogTable = $planSheet.ListObjects("tblPlanBacklog")
-    if ($backlogTable.Range.Address($false, $false) -ne "A55:S155") {
+    if ($backlogTable.Range.Address($false, $false) -ne $workbookLayout.backlog.tableRange) {
         throw "tblPlanBacklog range is $($backlogTable.Range.Address($false, $false))"
     }
-    Assert-NumberClose ([double]$planSheet.Rows.Item(58).RowHeight) ([double]$planSheet.StandardHeight) "Sheet 04 row 58 height" 0.1
+    $activeTableForLayout = $planSheet.ListObjects("tblPlanActive")
+    $greyTableForLayout = $planSheet.ListObjects("tblPlanGrey")
+    if ($activeTableForLayout.Range.Address($false, $false) -ne $workbookLayout.activePlan.tableRange) {
+        throw "tblPlanActive range is $($activeTableForLayout.Range.Address($false, $false))"
+    }
+    if ($greyTableForLayout.Range.Address($false, $false) -ne $workbookLayout.greyZone.tableRange) {
+        throw "tblPlanGrey range is $($greyTableForLayout.Range.Address($false, $false))"
+    }
+    Assert-NumberClose ([double]$planSheet.Rows.Item([int]$workbookLayout.backlog.dataStartRow + 2).RowHeight) ([double]$planSheet.StandardHeight) "Sheet 04 backlog row height" 0.1
     Write-Pass "COM table ranges"
 
     Assert-TextEquals ([string]$capacitySheet.Range("F6").Text) "Авто 00" "Capacity auto header"
@@ -410,7 +426,7 @@ try {
         "btnTaskRefresh" = "Обновить"
         "btnTaskExportXlsx" = "Экспорт"
         "btnTaskImportXlsx" = "Импорт"
-        "btnTaskImportCsv" = "Импорт CSV (до 100)"
+        "btnTaskImportCsv" = "Импорт CSV (до $($workbookLayout.limits.taskRows))"
         "tea_01_1" = ">"
         "tea_01_13" = "Экспорт"
     }
@@ -738,7 +754,7 @@ try {
         "btnQuarterPlanReloadBacklog" = "G2"
         "btnQuarterPlanRecalculate" = "P2"
         "btnQuarterPlanExportBacklog" = "Q2"
-        "btnQuarterPlanAddAllBacklog" = "A54"
+        "btnQuarterPlanAddAllBacklog" = [string]$workbookLayout.backlog.actionCell
     }
     foreach ($shapeName in $expectedActions.Keys) {
         $shape = $planSheet.Shapes.Item($shapeName)

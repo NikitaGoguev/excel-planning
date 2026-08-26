@@ -1,0 +1,324 @@
+Option Explicit
+Option Private Module
+
+' Pure scheduling domain engine. Inputs and output are Variant matrices; this module
+' intentionally has no dependency on the Excel object model or current UI state.
+
+Private Const QPS_TASK_PRESENT As Long = 1
+Private Const QPS_TASK_STATUS As Long = 2
+Private Const QPS_TASK_AN As Long = 3
+Private Const QPS_TASK_BE As Long = 4
+Private Const QPS_TASK_FE As Long = 5
+Private Const QPS_TASK_QA As Long = 6
+
+Private Const QPS_OUT_EFFORT As Long = 1
+Private Const QPS_OUT_READY As Long = 2
+Private Const QPS_OUT_AN_DAYS As Long = 3
+Private Const QPS_OUT_BE_DAYS As Long = 4
+Private Const QPS_OUT_FE_DAYS As Long = 5
+Private Const QPS_OUT_QA_DAYS As Long = 6
+Private Const QPS_OUT_AN_START As Long = 7
+Private Const QPS_OUT_AN_FINISH As Long = 8
+Private Const QPS_OUT_BE_START As Long = 9
+Private Const QPS_OUT_BE_FINISH As Long = 10
+Private Const QPS_OUT_FE_START As Long = 11
+Private Const QPS_OUT_FE_FINISH As Long = 12
+Private Const QPS_OUT_QA_START As Long = 13
+Private Const QPS_OUT_QA_FINISH As Long = 14
+Private Const QPS_OUT_DIAGNOSTIC As Long = 15
+
+Public Function QuarterPlanSchedule(ByVal tasks As Variant, ByVal resources As Variant, ByVal holidays As Variant, ByVal rules As Variant, ByVal firstWorkDate As Date, ByVal focusFactor As Double) As Variant
+    Dim output() As Variant
+    Dim state As Variant
+    Dim rowCount As Long
+    Dim rowIndex As Long
+
+    rowCount = QPMatrixRows(tasks)
+    If rowCount <= 0 Then
+        QuarterPlanSchedule = Empty
+        Exit Function
+    End If
+
+    ReDim output(1 To rowCount, 1 To QPS_OUT_DIAGNOSTIC)
+    state = QPInitializeResourceState(resources, firstWorkDate)
+
+    For rowIndex = 1 To rowCount
+        If QPTruthy(tasks(rowIndex, QPS_TASK_PRESENT)) Then
+            QPScheduleTask tasks, rowIndex, state, holidays, rules, firstWorkDate, focusFactor, output
+        End If
+    Next rowIndex
+
+    QuarterPlanSchedule = output
+End Function
+
+Private Sub QPScheduleTask(ByRef tasks As Variant, ByVal rowIndex As Long, ByRef state As Variant, ByRef holidays As Variant, ByRef rules As Variant, ByVal firstWorkDate As Date, ByVal focusFactor As Double, ByRef output() As Variant)
+    Dim statusCode As String
+    Dim includeBe As Boolean, includeFe As Boolean, includeQa As Boolean
+    Dim estimate(1 To 4) As Double, baseDays(1 To 4) As Long
+    Dim startDate(1 To 4) As Date, finishDate(1 To 4) As Date, actualDays(1 To 4) As Long
+    Dim anReady As Date, beReady As Date, feReady As Date, qaFirstReady As Date, qaSecondReady As Date
+    Dim beProgressReady As Date, anProgressReady As Date, unusedReady As Date
+    Dim latestDev As Date, latestPreQa As Date, finalFinish As Date
+    Dim qaFirstBase As Long, qaFirstEstimate As Double, qaSecondEstimate As Double
+    Dim qaPartStart As Date, qaPartFinish As Date, qaPartDays As Long
+    Dim diagnostic As String
+    Dim anBeMin As Long, beFeMin As Long
+    Dim anBePercent As Double, beFePercent As Double, qaFirstPercent As Double
+    Dim index As Long
+
+    statusCode = UCase$(Trim$(CStr(tasks(rowIndex, QPS_TASK_STATUS))))
+    includeBe = (statusCode <> "AN" And statusCode <> "FE" And statusCode <> "DEFER")
+    includeFe = (statusCode <> "AN" And statusCode <> "BE" And statusCode <> "DEFER")
+    includeQa = (statusCode <> "AN" And statusCode <> "DEV" And statusCode <> "BE" And statusCode <> "FE" And statusCode <> "DEFER")
+
+    For index = 1 To 4
+        estimate(index) = QPNumber(tasks(rowIndex, QPS_TASK_AN + index - 1))
+        baseDays(index) = QPPlannedDuration(estimate(index), focusFactor)
+        output(rowIndex, QPS_OUT_EFFORT) = QPNumber(output(rowIndex, QPS_OUT_EFFORT)) + baseDays(index)
+    Next index
+    If statusCode = "DEFER" Then Exit Sub
+    If Not includeBe Then baseDays(2) = 0
+    If Not includeFe Then baseDays(3) = 0
+    If Not includeQa Then baseDays(4) = 0
+
+    anBeMin = CLng(QPRule(rules, "AN_BE_MIN_WORKDAYS", 5))
+    anBePercent = QPRule(rules, "AN_BE_COMPLETION_PERCENT", 0.5)
+    beFeMin = CLng(QPRule(rules, "BE_FE_MIN_WORKDAYS", 5))
+    beFePercent = QPRule(rules, "BE_FE_COMPLETION_PERCENT", 0.5)
+    qaFirstPercent = QPRule(rules, "QA_FIRST_PART_PERCENT", 0.5)
+
+    If baseDays(1) > 0 And QPResourceCount(state, "AN") = 0 Then diagnostic = QPAppend(diagnostic, "No AN resources.")
+    If baseDays(2) > 0 And QPResourceCount(state, "BE") = 0 Then diagnostic = QPAppend(diagnostic, "No BE resources.")
+    If baseDays(3) > 0 And QPResourceCount(state, "FE") = 0 Then diagnostic = QPAppend(diagnostic, "No FE resources.")
+    If baseDays(4) > 0 And QPResourceCount(state, "QA") = 0 Then diagnostic = QPAppend(diagnostic, "No QA resources.")
+    If diagnostic <> "" Then
+        output(rowIndex, QPS_OUT_DIAGNOSTIC) = diagnostic
+        Exit Sub
+    End If
+
+    anReady = QPNextWorkdayOnOrAfter(firstWorkDate, holidays)
+    If baseDays(1) > 0 Then
+        QPAllocateStage state, "AN", anReady, estimate(1), focusFactor, holidays, QPProgressThreshold(baseDays(1), anBeMin, anBePercent, focusFactor, estimate(1)), startDate(1), finishDate(1), actualDays(1), anProgressReady
+        latestPreQa = finishDate(1)
+        If statusCode = "AN" Then finalFinish = finishDate(1): GoTo WriteResult
+        If baseDays(1) <= anBeMin Then beReady = QPNextWorkdayAfter(finishDate(1), holidays) Else beReady = anProgressReady
+        If beReady = 0 Then beReady = QPNextWorkdayAfter(finishDate(1), holidays)
+        qaFirstReady = QPNextWorkdayAfter(finishDate(1), holidays)
+    Else
+        beReady = anReady
+        qaFirstReady = anReady
+    End If
+
+    If baseDays(2) > 0 Then
+        QPAllocateStage state, "BE", beReady, estimate(2), focusFactor, holidays, QPProgressThreshold(baseDays(2), beFeMin, beFePercent, focusFactor, estimate(2)), startDate(2), finishDate(2), actualDays(2), beProgressReady
+        latestPreQa = QPLater(latestPreQa, finishDate(2))
+        latestDev = finishDate(2)
+    End If
+
+    If baseDays(3) > 0 Then
+        If baseDays(2) = 0 Then
+            feReady = beReady
+        ElseIf estimate(2) <= beFeMin Or baseDays(2) <= beFeMin Then
+            feReady = QPNextWorkdayAfter(finishDate(2), holidays)
+        Else
+            feReady = beProgressReady
+        End If
+        If feReady = 0 Then feReady = QPNextWorkdayAfter(finishDate(2), holidays)
+        QPAllocateStage state, "FE", feReady, estimate(3), focusFactor, holidays, 0, startDate(3), finishDate(3), actualDays(3), unusedReady
+        latestPreQa = QPLater(latestPreQa, finishDate(3))
+        latestDev = QPLater(latestDev, finishDate(3))
+    End If
+
+    If statusCode = "DEV" Or statusCode = "BE" Or statusCode = "FE" Then
+        finalFinish = latestDev
+        If finalFinish = 0 Then finalFinish = latestPreQa
+        GoTo WriteResult
+    End If
+
+    If baseDays(4) > 0 Then
+        qaFirstBase = QPCeiling(CDbl(baseDays(4)) * qaFirstPercent)
+        qaFirstEstimate = CDbl(qaFirstBase) * focusFactor
+        If qaFirstEstimate > estimate(4) Then qaFirstEstimate = estimate(4)
+        qaSecondEstimate = estimate(4) - qaFirstEstimate
+        If qaSecondEstimate < 0.000001 Then qaSecondEstimate = 0
+
+        If qaFirstEstimate > 0 Then
+            QPAllocateStage state, "QA", qaFirstReady, qaFirstEstimate, focusFactor, holidays, 0, qaPartStart, qaPartFinish, qaPartDays, unusedReady
+            startDate(4) = qaPartStart: finishDate(4) = qaPartFinish: actualDays(4) = qaPartDays
+        End If
+        If latestDev <> 0 Then
+            qaSecondReady = QPNextWorkdayAfter(latestDev, holidays)
+        ElseIf latestPreQa <> 0 Then
+            qaSecondReady = QPNextWorkdayAfter(latestPreQa, holidays)
+        Else
+            qaSecondReady = anReady
+        End If
+        If qaSecondEstimate > 0 Then
+            qaPartStart = 0: qaPartFinish = 0: qaPartDays = 0: unusedReady = 0
+            QPAllocateStage state, "QA", qaSecondReady, qaSecondEstimate, focusFactor, holidays, 0, qaPartStart, qaPartFinish, qaPartDays, unusedReady
+            If startDate(4) = 0 Or qaPartStart < startDate(4) Then startDate(4) = qaPartStart
+            If qaPartFinish > finishDate(4) Then finishDate(4) = qaPartFinish
+            actualDays(4) = actualDays(4) + qaPartDays
+        End If
+        finalFinish = finishDate(4)
+    Else
+        finalFinish = latestPreQa
+    End If
+
+WriteResult:
+    If finalFinish <> 0 Then output(rowIndex, QPS_OUT_READY) = finalFinish
+    For index = 1 To 4
+        If actualDays(index) > 0 Then output(rowIndex, QPS_OUT_AN_DAYS + index - 1) = actualDays(index)
+        If startDate(index) <> 0 Then output(rowIndex, QPS_OUT_AN_START + ((index - 1) * 2)) = startDate(index)
+        If finishDate(index) <> 0 Then output(rowIndex, QPS_OUT_AN_FINISH + ((index - 1) * 2)) = finishDate(index)
+    Next index
+End Sub
+
+Private Function QPInitializeResourceState(ByRef resources As Variant, ByVal firstWorkDate As Date) As Variant
+    Dim state() As Variant, rowCount As Long, rowIndex As Long, colIndex As Long
+    rowCount = QPMatrixRows(resources)
+    If rowCount <= 0 Then Exit Function
+    ReDim state(1 To rowCount, 1 To 9)
+    For rowIndex = 1 To rowCount
+        state(rowIndex, 1) = UCase$(Trim$(CStr(resources(rowIndex, 1))))
+        state(rowIndex, 2) = QPNumber(resources(rowIndex, 2))
+        state(rowIndex, 3) = firstWorkDate
+        For colIndex = 3 To 8
+            If IsDate(resources(rowIndex, colIndex)) Then state(rowIndex, colIndex + 1) = CDate(resources(rowIndex, colIndex))
+        Next colIndex
+    Next rowIndex
+    QPInitializeResourceState = state
+End Function
+
+Private Sub QPAllocateStage(ByRef state As Variant, ByVal expertise As String, ByVal earliestStart As Date, ByVal estimate As Double, ByVal focusFactor As Double, ByRef holidays As Variant, ByVal threshold As Double, ByRef stageStart As Date, ByRef stageFinish As Date, ByRef stageDays As Long, ByRef thresholdDate As Date)
+    Dim workDate As Date, resourceIndex As Long, progress As Double, completed As Double, guardDays As Long
+    If estimate <= 0 Then Exit Sub
+    workDate = QPNextWorkdayOnOrAfter(earliestStart, holidays)
+    Do While completed + 0.000001 < estimate
+        guardDays = guardDays + 1
+        If guardDays > 20000 Then Exit Sub
+        resourceIndex = QPAvailableResource(state, expertise, workDate)
+        If resourceIndex > 0 Then
+            If stageStart = 0 Then stageStart = workDate
+            progress = CDbl(state(resourceIndex, 2)) * focusFactor
+            completed = completed + progress
+            stageFinish = workDate
+            state(resourceIndex, 3) = QPNextWorkdayAfter(workDate, holidays)
+            If thresholdDate = 0 And threshold > 0 And completed + 0.000001 >= threshold Then thresholdDate = workDate
+        End If
+        If completed + 0.000001 < estimate Then workDate = QPNextWorkdayAfter(workDate, holidays)
+    Loop
+    If stageStart <> 0 Then stageDays = QPWorkdaysBetween(stageStart, stageFinish, holidays)
+End Sub
+
+Private Function QPAvailableResource(ByRef state As Variant, ByVal expertise As String, ByVal workDate As Date) As Long
+    Dim rowIndex As Long, bestProgress As Double
+    For rowIndex = 1 To QPMatrixRows(state)
+        If state(rowIndex, 1) = expertise And CDbl(state(rowIndex, 2)) > 0 Then
+            If CDate(state(rowIndex, 3)) <= workDate And Not QPOnVacation(state, rowIndex, workDate) Then
+                If CDbl(state(rowIndex, 2)) > bestProgress Then bestProgress = CDbl(state(rowIndex, 2)): QPAvailableResource = rowIndex
+            End If
+        End If
+    Next rowIndex
+End Function
+
+Private Function QPOnVacation(ByRef state As Variant, ByVal rowIndex As Long, ByVal workDate As Date) As Boolean
+    Dim colIndex As Long
+    For colIndex = 4 To 8 Step 2
+        If IsDate(state(rowIndex, colIndex)) And IsDate(state(rowIndex, colIndex + 1)) Then
+            If workDate >= CDate(state(rowIndex, colIndex)) And workDate <= CDate(state(rowIndex, colIndex + 1)) Then QPOnVacation = True: Exit Function
+        End If
+    Next colIndex
+End Function
+
+Private Function QPResourceCount(ByRef state As Variant, ByVal expertise As String) As Long
+    Dim rowIndex As Long
+    For rowIndex = 1 To QPMatrixRows(state)
+        If state(rowIndex, 1) = expertise And QPNumber(state(rowIndex, 2)) > 0 Then QPResourceCount = QPResourceCount + 1
+    Next rowIndex
+End Function
+
+Private Function QPRule(ByRef rules As Variant, ByVal code As String, ByVal fallback As Double) As Double
+    Dim rowIndex As Long
+    QPRule = fallback
+    For rowIndex = 1 To QPMatrixRows(rules)
+        If UCase$(Trim$(CStr(rules(rowIndex, 1)))) = code And IsNumeric(rules(rowIndex, 2)) Then QPRule = CDbl(rules(rowIndex, 2)): Exit Function
+    Next rowIndex
+End Function
+
+Private Function QPProgressThreshold(ByVal duration As Long, ByVal minDays As Long, ByVal percent As Double, ByVal focusFactor As Double, ByVal estimate As Double) As Double
+    Dim percentDays As Long, threshold As Double
+    percentDays = QPCeiling(CDbl(duration) * percent)
+    If percentDays < minDays Then percentDays = minDays
+    threshold = CDbl(percentDays) * focusFactor
+    If threshold > estimate Then threshold = estimate
+    QPProgressThreshold = threshold
+End Function
+
+Private Function QPPlannedDuration(ByVal estimate As Double, ByVal focusFactor As Double) As Long
+    If estimate > 0 And focusFactor > 0 Then QPPlannedDuration = QPCeiling(estimate / focusFactor)
+End Function
+
+Private Function QPCeiling(ByVal value As Double) As Long
+    If value <= 0 Then Exit Function
+    QPCeiling = CLng(Fix(value))
+    If CDbl(QPCeiling) + 0.000001 < value Then QPCeiling = QPCeiling + 1
+End Function
+
+Private Function QPNextWorkdayOnOrAfter(ByVal value As Date, ByRef holidays As Variant) As Date
+    Dim result As Date
+    result = DateValue(value)
+    Do While Weekday(result, vbMonday) > 5 Or QPIsHoliday(result, holidays)
+        result = DateAdd("d", 1, result)
+    Loop
+    QPNextWorkdayOnOrAfter = result
+End Function
+
+Private Function QPNextWorkdayAfter(ByVal value As Date, ByRef holidays As Variant) As Date
+    QPNextWorkdayAfter = QPNextWorkdayOnOrAfter(DateAdd("d", 1, DateValue(value)), holidays)
+End Function
+
+Private Function QPWorkdaysBetween(ByVal firstDate As Date, ByVal lastDate As Date, ByRef holidays As Variant) As Long
+    Dim current As Date
+    If firstDate = 0 Or lastDate = 0 Then Exit Function
+    current = QPNextWorkdayOnOrAfter(firstDate, holidays)
+    Do While current <= lastDate
+        QPWorkdaysBetween = QPWorkdaysBetween + 1
+        current = QPNextWorkdayAfter(current, holidays)
+    Loop
+End Function
+
+Private Function QPIsHoliday(ByVal value As Date, ByRef holidays As Variant) As Boolean
+    Dim index As Long
+    If Not IsArray(holidays) Then Exit Function
+    On Error GoTo SafeExit
+    For index = LBound(holidays) To UBound(holidays)
+        If IsDate(holidays(index)) Then
+            If CLng(DateValue(CDate(holidays(index)))) = CLng(DateValue(value)) Then QPIsHoliday = True: Exit Function
+        End If
+    Next index
+SafeExit:
+End Function
+
+Private Function QPMatrixRows(ByRef value As Variant) As Long
+    If Not IsArray(value) Then Exit Function
+    On Error GoTo SafeExit
+    QPMatrixRows = UBound(value, 1) - LBound(value, 1) + 1
+SafeExit:
+End Function
+
+Private Function QPNumber(ByVal value As Variant) As Double
+    If Not IsError(value) And Not IsEmpty(value) Then If IsNumeric(value) Then QPNumber = CDbl(value)
+End Function
+
+Private Function QPTruthy(ByVal value As Variant) As Boolean
+    If VarType(value) = vbBoolean Then QPTruthy = CBool(value) Else QPTruthy = (QPNumber(value) <> 0 Or Trim$(CStr(value)) <> "")
+End Function
+
+Private Function QPLater(ByVal firstDate As Date, ByVal secondDate As Date) As Date
+    If firstDate >= secondDate Then QPLater = firstDate Else QPLater = secondDate
+End Function
+
+Private Function QPAppend(ByVal currentText As String, ByVal addition As String) As String
+    If currentText = "" Then QPAppend = addition Else QPAppend = currentText & " " & addition
+End Function

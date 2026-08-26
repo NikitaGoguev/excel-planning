@@ -1,7 +1,15 @@
 {
-  "sources": [
-    "assets/vba/ThisWorkbook_holiday_macro.txt",
-    "assets/vba/QuarterPlanActions_module.txt"
+  "components": [
+    { "name": "ThisWorkbook", "type": "document", "source": "assets/vba/ThisWorkbook_holiday_macro.txt" },
+    { "name": "QuarterPlanCommon", "type": "standard", "source": "assets/vba/QuarterPlanCommon_module.txt" },
+    { "name": "QuarterPlanUi", "type": "standard", "source": "assets/vba/QuarterPlanUi_module.txt" },
+    { "name": "QuarterPlanTeamCapacity", "type": "standard", "source": "assets/vba/QuarterPlanTeamCapacity_module.txt" },
+    { "name": "QuarterPlanTaskEstimates", "type": "standard", "source": "assets/vba/QuarterPlanTaskEstimates_module.txt" },
+    { "name": "QuarterPlanImportExport", "type": "standard", "source": "assets/vba/QuarterPlanImportExport_module.txt" },
+    { "name": "QuarterPlanPlanActions", "type": "standard", "source": "assets/vba/QuarterPlanPlanActions_module.txt" },
+    { "name": "QuarterPlanScheduler", "type": "standard", "source": "assets/vba/QuarterPlanScheduler_module.txt" },
+    { "name": "QuarterPlanLimits", "type": "standard", "source": "assets/vba/QuarterPlanLimits_module.txt", "generated": true },
+    { "name": "QuarterPlanActions", "type": "standard", "source": "assets/vba/QuarterPlanActions_module.txt" }
   ],
   "requiredPublicMacros": [
     "RunQuarterPlanReloadBacklog",
@@ -23,6 +31,23 @@
     "RunTaskEstimateExportXlsx",
     "RunTaskEstimateExportXlsxPath",
     "RunTaskEstimateExpressExportPath"
+  ],
+  "scheduler": {
+    "component": "QuarterPlanScheduler",
+    "entrypoint": "QuarterPlanSchedule",
+    "testSource": "tests/vba/QuarterPlanSchedulerTests_module.txt",
+    "minimumScenarios": 32,
+    "forbiddenPatterns": ["\\bWorkbook\\b", "\\bWorksheet\\b", "\\bRange\\b", "\\bListObject\\b", "\\bApplication\\b", "\\bThisWorkbook\\b"]
+  },
+  "handwrittenLimitForbiddenPatterns": [
+    "\\bTEAM_MEMBER_LIMIT\\b",
+    "\\bTASK_ESTIMATE_TEMPLATE_(?:RANGE|LAST_ROW|FIRST_DATA_ROW|LAST_DATA_ROW)\\b",
+    "\"A23:L43\"",
+    "\"A13:D33\"",
+    "\"C3:M103\"",
+    "\"A55:S155\"",
+    "\"A54\"",
+    "\"Импорт CSV \\(до 100\\)\""
   ],
   "forbiddenPatterns": [
     {

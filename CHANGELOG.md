@@ -2,6 +2,20 @@
 
 Все заметные изменения QuarterPlan Excel документируются в этом файле.
 
+## [Unreleased]
+
+### Changed
+
+- structural workbook limits centralized in `config/workbook-limits.json` with generated VBA constants;
+- portable builder split into orchestration, sheet builders, design/validation helpers and OOXML post-processing;
+- `ThisWorkbook` reduced to events and compatibility wrappers; VBA logic split into a component manifest;
+- scheduler extracted into an Excel-independent Variant-matrix domain module.
+
+### Added
+
+- config schema/alternate-layout tests and canonical XLSX package fingerprint;
+- 32 test-only Excel COM scheduler business scenarios and `npm run verify:scheduler`.
+
 ## [1.0.0] - 2026-08-25
 
 Первый публичный продуктовый релиз.

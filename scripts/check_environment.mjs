@@ -14,9 +14,16 @@ if (nodeMajor !== 24) {
 for (const relativePath of [
   "assets/Шаблон Экспресс оценки.xlsx",
   "assets/vba/vbaProject.step2.bin",
+  "config/workbook-limits.json",
+  "contracts/vba.contract.json",
   "data/test_data_quarter_planning.json",
 ]) {
   await fs.access(path.join(repoRoot, relativePath));
+}
+
+const vbaContract = JSON.parse(await fs.readFile(path.join(repoRoot, "contracts/vba.contract.json"), "utf8"));
+for (const component of vbaContract.components ?? []) {
+  await fs.access(path.join(repoRoot, component.source));
 }
 
 if (typeof ExcelJS.Workbook !== "function" || typeof JSZip.loadAsync !== "function") {

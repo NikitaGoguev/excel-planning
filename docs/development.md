@@ -11,6 +11,7 @@
 ```text
 npm run build
 npm run verify
+npm run verify:scheduler
 npm run audit:deps
 ```
 
@@ -34,6 +35,22 @@ Supported environment interface:
 - `QUARTER_PLANNING_XLSM_OUTPUT`;
 - `RELEASE_VERSION`.
 
+Developer-only alternate layout builds may additionally set `QUARTER_PLANNING_LIMITS_PATH`; the public source of truth remains `config/workbook-limits.json`.
+
+## Structural limits
+
+Edit only `config/workbook-limits.json`, then run:
+
+```text
+npm run generate:limits
+npm run build:xlsx
+npm run sync:vba
+npm run build:xlsm
+npm run verify:excel
+```
+
+The resolver derives team-member, holiday, estimate, active-plan, grey-zone and backlog ranges, including the bulk-action cell. `taskRows` controls both estimates and backlog capacity. Generated VBA constants are checked for drift by `verify:static`.
+
 ## VBA workflow
 
 After changing VBA source:
@@ -46,7 +63,9 @@ npm run normalize
 npm run verify:excel
 ```
 
-Sync saves through Excel, sanitizes Office metadata, copies the validated template and extracts the complete VBA project. It never patches binary VBA streams.
+Sync reads the component manifest, updates its document/standard modules, removes only stale managed `QuarterPlan*` standard modules, saves through Excel, sanitizes Office metadata, copies the validated template and extracts the complete VBA project. It never patches binary VBA streams.
+
+`npm run verify:scheduler` imports the test-only harness into a temporary XLSM copy and executes 32 business scenarios. `npm run verify:excel` includes this gate before the regular workbook acceptance.
 
 ## Publishing
 

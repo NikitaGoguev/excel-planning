@@ -1,0 +1,877 @@
+Option Explicit
+Option Private Module
+
+Public Function IsQuarterPlanActionCell(ByVal ws As Worksheet, ByVal Target As Range) As Boolean
+    On Error GoTo SafeExit
+
+    Dim tbl As ListObject
+    Dim actionCol As Long
+
+    Set tbl = GetContainingTable(ws, Target)
+    If tbl Is Nothing Then Exit Function
+    If Intersect(Target, tbl.DataBodyRange) Is Nothing Then Exit Function
+    If Target.Column < tbl.Range.Column Or Target.Column > tbl.Range.Column + PLAN_COL_ACTION_DOWN - 1 Then Exit Function
+    If Trim$(CStr(Target.Value)) = "" Then Exit Function
+
+    actionCol = Target.Column - tbl.Range.Column + 1
+
+    Select Case tbl.Name
+        Case "tblPlanBacklog"
+            IsQuarterPlanActionCell = (actionCol = PLAN_COL_ACTION_TO_PLAN _
+                Or actionCol = PLAN_COL_ACTION_UP _
+                Or actionCol = PLAN_COL_ACTION_DOWN)
+        Case "tblPlanActive"
+            IsQuarterPlanActionCell = (actionCol = PLAN_COL_ACTION_TO_GREY _
+                Or actionCol = PLAN_COL_ACTION_TO_BACKLOG _
+                Or actionCol = PLAN_COL_ACTION_UP _
+                Or actionCol = PLAN_COL_ACTION_DOWN)
+        Case "tblPlanGrey"
+            IsQuarterPlanActionCell = (actionCol = PLAN_COL_ACTION_TO_BACKLOG _
+                Or actionCol = PLAN_COL_ACTION_UP _
+                Or actionCol = PLAN_COL_ACTION_DOWN)
+    End Select
+
+SafeExit:
+End Function
+
+Public Function HandleQuarterPlanAction(ByVal ws As Worksheet, ByVal Target As Range) As Boolean
+    On Error GoTo SafeExit
+
+    Dim tbl As ListObject
+    Dim actionCol As Long
+    Dim sourceName As String
+    Dim targetName As String
+
+    Set tbl = GetContainingTable(ws, Target)
+    If tbl Is Nothing Then Exit Function
+    If Intersect(Target, tbl.DataBodyRange) Is Nothing Then Exit Function
+    If Target.Column < tbl.Range.Column Or Target.Column > tbl.Range.Column + PLAN_COL_ACTION_DOWN - 1 Then Exit Function
+    If Trim$(CStr(Target.Value)) = "" Then Exit Function
+
+    sourceName = tbl.Name
+    actionCol = Target.Column - tbl.Range.Column + 1
+
+    If actionCol = PLAN_COL_ACTION_UP Or actionCol = PLAN_COL_ACTION_DOWN Then
+        Application.EnableEvents = False
+        HandleQuarterPlanAction = ReorderQuarterPlanTask(tbl, Target.Row - tbl.DataBodyRange.Row + 1, actionCol)
+        Application.EnableEvents = True
+        Exit Function
+    End If
+
+    Select Case sourceName
+        Case "tblPlanBacklog"
+            If actionCol <> PLAN_COL_ACTION_TO_PLAN Then Exit Function
+            targetName = "tblPlanActive"
+        Case "tblPlanActive"
+            If actionCol = PLAN_COL_ACTION_TO_GREY Then
+                targetName = "tblPlanGrey"
+            ElseIf actionCol = PLAN_COL_ACTION_TO_BACKLOG Then
+                targetName = "tblPlanBacklog"
+            Else
+                Exit Function
+            End If
+        Case "tblPlanGrey"
+            If actionCol <> PLAN_COL_ACTION_TO_BACKLOG Then Exit Function
+            targetName = "tblPlanBacklog"
+        Case Else
+            Exit Function
+    End Select
+
+    Application.EnableEvents = False
+    MoveQuarterPlanTask ws, tbl, ws.ListObjects(targetName), Target.Row - tbl.DataBodyRange.Row + 1
+    Application.EnableEvents = True
+    HandleQuarterPlanAction = True
+
+SafeExit:
+    Application.EnableEvents = True
+End Function
+
+Public Function ReorderQuarterPlanTask(ByVal tbl As ListObject, ByVal sourceRowIndex As Long, ByVal actionCol As Long) As Boolean
+    Dim targetRowIndex As Long
+
+    If sourceRowIndex < 1 Or sourceRowIndex > tbl.DataBodyRange.Rows.Count Then Exit Function
+    If Not QuarterPlanRowHasTask(tbl, sourceRowIndex) Then Exit Function
+
+    If actionCol = PLAN_COL_ACTION_UP Then
+        targetRowIndex = PreviousTaskQuarterPlanRow(tbl, sourceRowIndex)
+    ElseIf actionCol = PLAN_COL_ACTION_DOWN Then
+        targetRowIndex = NextTaskQuarterPlanRow(tbl, sourceRowIndex)
+    End If
+
+    If targetRowIndex = 0 Then Exit Function
+
+    SwapQuarterPlanRows tbl, sourceRowIndex, targetRowIndex
+    RefreshQuarterPlanTable tbl
+    SyncQuarterPlanTableActionButtons tbl
+    ReorderQuarterPlanTask = True
+End Function
+
+Public Sub SwapQuarterPlanRows(ByVal tbl As ListObject, ByVal firstRowIndex As Long, ByVal secondRowIndex As Long)
+    Dim firstValues As Variant
+    Dim secondValues As Variant
+    Dim firstTechValues As Variant
+    Dim secondTechValues As Variant
+    Dim firstSheetRow As Long
+    Dim secondSheetRow As Long
+
+    firstValues = tbl.DataBodyRange.Cells(firstRowIndex, PLAN_COL_DATA_FIRST).Resize(1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).Value
+    secondValues = tbl.DataBodyRange.Cells(secondRowIndex, PLAN_COL_DATA_FIRST).Resize(1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).Value
+    tbl.DataBodyRange.Cells(firstRowIndex, PLAN_COL_DATA_FIRST).Resize(1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).Value = secondValues
+    tbl.DataBodyRange.Cells(secondRowIndex, PLAN_COL_DATA_FIRST).Resize(1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).Value = firstValues
+
+    firstSheetRow = tbl.DataBodyRange.Row + firstRowIndex - 1
+    secondSheetRow = tbl.DataBodyRange.Row + secondRowIndex - 1
+
+    firstTechValues = tbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & firstSheetRow & ":" & PLAN_TECH_LAST_COL_LETTER & firstSheetRow).Value
+    secondTechValues = tbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & secondSheetRow & ":" & PLAN_TECH_LAST_COL_LETTER & secondSheetRow).Value
+    tbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & firstSheetRow & ":" & PLAN_TECH_LAST_COL_LETTER & firstSheetRow).Value = secondTechValues
+    tbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & secondSheetRow & ":" & PLAN_TECH_LAST_COL_LETTER & secondSheetRow).Value = firstTechValues
+End Sub
+
+Public Function GetContainingTable(ByVal ws As Worksheet, ByVal Target As Range) As ListObject
+    Dim tbl As ListObject
+
+    For Each tbl In ws.ListObjects
+        If Not tbl.DataBodyRange Is Nothing Then
+            If Not Intersect(Target, tbl.DataBodyRange) Is Nothing Then
+                Set GetContainingTable = tbl
+                Exit Function
+            End If
+        End If
+    Next tbl
+End Function
+
+Public Sub MoveQuarterPlanTask(ByVal ws As Worksheet, ByVal sourceTbl As ListObject, ByVal targetTbl As ListObject, ByVal sourceRowIndex As Long)
+    Dim targetRowIndex As Long
+
+    If sourceRowIndex < 1 Or sourceRowIndex > sourceTbl.DataBodyRange.Rows.Count Then Exit Sub
+    If Not QuarterPlanRowHasTask(sourceTbl, sourceRowIndex) Then Exit Sub
+
+    targetRowIndex = FirstEmptyQuarterPlanRow(targetTbl)
+    If targetRowIndex = 0 Then
+        MsgBox "В целевой секции нет свободных строк.", vbExclamation
+        Exit Sub
+    End If
+
+    targetTbl.DataBodyRange.Cells(targetRowIndex, PLAN_COL_DATA_FIRST).Resize(1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).Value = _
+        sourceTbl.DataBodyRange.Cells(sourceRowIndex, PLAN_COL_DATA_FIRST).Resize(1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).Value
+
+    ClearQuarterPlanRowSchedule targetTbl.DataBodyRange.Rows(targetRowIndex)
+    CompactQuarterPlanTable sourceTbl, sourceRowIndex
+    RefreshQuarterPlanTable sourceTbl
+    RefreshQuarterPlanTable targetTbl
+    SyncQuarterPlanTableActionButtons sourceTbl
+    SyncQuarterPlanTableActionButtons targetTbl
+End Sub
+
+Public Sub MoveAllQuarterPlanTasks(ByVal ws As Worksheet, ByVal sourceTbl As ListObject, ByVal targetTbl As ListObject)
+    Dim sourceRowIndex As Long
+
+    Do
+        sourceRowIndex = FirstTaskQuarterPlanRow(sourceTbl)
+        If sourceRowIndex = 0 Then Exit Do
+        If FirstEmptyQuarterPlanRow(targetTbl) = 0 Then Exit Do
+        MoveQuarterPlanTask ws, sourceTbl, targetTbl, sourceRowIndex
+    Loop
+End Sub
+
+Public Function MoveAllQuarterPlanTasksFast(ByVal sourceTbl As ListObject, ByVal targetTbl As ListObject) As Long
+    Dim sourceRowIndex As Long
+    Dim targetRowIndex As Long
+    Dim dataWidth As Long
+    Dim sourceValues As Variant
+    Dim targetValues() As Variant
+    Dim remainingValues() As Variant
+    Dim taskCount As Long
+    Dim remainingCount As Long
+    Dim availableTargetRows As Long
+    Dim moveIndex As Long
+    Dim remainingIndex As Long
+    Dim col As Long
+
+    If sourceTbl.DataBodyRange Is Nothing Then Exit Function
+    If targetTbl.DataBodyRange Is Nothing Then Exit Function
+
+    targetRowIndex = FirstEmptyQuarterPlanRow(targetTbl)
+    If targetRowIndex = 0 Then Exit Function
+
+    dataWidth = PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1
+    availableTargetRows = targetTbl.DataBodyRange.Rows.Count - targetRowIndex + 1
+    sourceValues = sourceTbl.DataBodyRange.Cells(1, PLAN_COL_DATA_FIRST).Resize(sourceTbl.DataBodyRange.Rows.Count, dataWidth).Value
+
+    For sourceRowIndex = 1 To sourceTbl.DataBodyRange.Rows.Count
+        If QuarterPlanArrayRowHasTask(sourceValues, sourceRowIndex, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1) Then
+            taskCount = taskCount + 1
+        End If
+    Next sourceRowIndex
+
+    If taskCount = 0 Then Exit Function
+
+    MoveAllQuarterPlanTasksFast = taskCount
+    If MoveAllQuarterPlanTasksFast > availableTargetRows Then MoveAllQuarterPlanTasksFast = availableTargetRows
+    remainingCount = taskCount - MoveAllQuarterPlanTasksFast
+
+    If MoveAllQuarterPlanTasksFast > 0 Then ReDim targetValues(1 To MoveAllQuarterPlanTasksFast, 1 To dataWidth)
+    If remainingCount > 0 Then ReDim remainingValues(1 To remainingCount, 1 To dataWidth)
+
+    For sourceRowIndex = 1 To sourceTbl.DataBodyRange.Rows.Count
+        If QuarterPlanArrayRowHasTask(sourceValues, sourceRowIndex, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1) Then
+            If moveIndex < MoveAllQuarterPlanTasksFast Then
+                moveIndex = moveIndex + 1
+                For col = 1 To dataWidth
+                    targetValues(moveIndex, col) = sourceValues(sourceRowIndex, col)
+                Next col
+            Else
+                remainingIndex = remainingIndex + 1
+                For col = 1 To dataWidth
+                    remainingValues(remainingIndex, col) = sourceValues(sourceRowIndex, col)
+                Next col
+            End If
+        End If
+    Next sourceRowIndex
+
+    If MoveAllQuarterPlanTasksFast > 0 Then
+        targetTbl.DataBodyRange.Cells(targetRowIndex, PLAN_COL_DATA_FIRST).Resize(MoveAllQuarterPlanTasksFast, dataWidth).Value = targetValues
+        targetTbl.DataBodyRange.Cells(targetRowIndex, PLAN_COL_READY_DATE).Resize(MoveAllQuarterPlanTasksFast, 1).ClearContents
+        targetTbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & (targetTbl.DataBodyRange.Row + targetRowIndex - 1) & ":" & PLAN_TECH_LAST_COL_LETTER & (targetTbl.DataBodyRange.Row + targetRowIndex + MoveAllQuarterPlanTasksFast - 2)).ClearContents
+    End If
+
+    RewriteQuarterPlanSourceRows sourceTbl, remainingValues, remainingCount
+End Function
+
+Public Function QuarterPlanArrayRowHasTask(ByRef values As Variant, ByVal rowIndex As Long, ByVal lastTaskCol As Long) As Boolean
+    Dim col As Long
+
+    For col = 1 To lastTaskCol
+        If Trim$(CStr(values(rowIndex, col))) <> "" Then
+            QuarterPlanArrayRowHasTask = True
+            Exit Function
+        End If
+    Next col
+End Function
+
+Public Sub RewriteQuarterPlanSourceRows(ByVal tbl As ListObject, ByRef remainingValues() As Variant, ByVal remainingCount As Long)
+    Dim dataWidth As Long
+
+    dataWidth = PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1
+
+    If remainingCount > 0 Then
+        tbl.DataBodyRange.Cells(1, PLAN_COL_DATA_FIRST).Resize(remainingCount, dataWidth).Value = remainingValues
+        tbl.DataBodyRange.Cells(1, PLAN_COL_READY_DATE).Resize(remainingCount, 1).ClearContents
+        tbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & tbl.DataBodyRange.Row & ":" & PLAN_TECH_LAST_COL_LETTER & (tbl.DataBodyRange.Row + remainingCount - 1)).ClearContents
+    End If
+
+    If remainingCount < tbl.DataBodyRange.Rows.Count Then
+        tbl.DataBodyRange.Cells(remainingCount + 1, PLAN_COL_DATA_FIRST).Resize(tbl.DataBodyRange.Rows.Count - remainingCount, dataWidth).ClearContents
+    End If
+End Sub
+
+Public Function FirstTaskQuarterPlanRow(ByVal tbl As ListObject) As Long
+    Dim rowIndex As Long
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If QuarterPlanRowHasTask(tbl, rowIndex) Then
+            FirstTaskQuarterPlanRow = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function FirstEmptyQuarterPlanRow(ByVal tbl As ListObject) As Long
+    Dim rowIndex As Long
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If Not QuarterPlanRowHasTask(tbl, rowIndex) Then
+            FirstEmptyQuarterPlanRow = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function PreviousTaskQuarterPlanRow(ByVal tbl As ListObject, ByVal sourceRowIndex As Long) As Long
+    Dim rowIndex As Long
+
+    For rowIndex = sourceRowIndex - 1 To 1 Step -1
+        If QuarterPlanRowHasTask(tbl, rowIndex) Then
+            PreviousTaskQuarterPlanRow = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function NextTaskQuarterPlanRow(ByVal tbl As ListObject, ByVal sourceRowIndex As Long) As Long
+    Dim rowIndex As Long
+
+    For rowIndex = sourceRowIndex + 1 To tbl.DataBodyRange.Rows.Count
+        If QuarterPlanRowHasTask(tbl, rowIndex) Then
+            NextTaskQuarterPlanRow = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function QuarterPlanRowHasTask(ByVal tbl As ListObject, ByVal rowIndex As Long) As Boolean
+    Dim col As Long
+    Dim valueText As String
+
+    For col = PLAN_COL_DATA_FIRST To PLAN_COL_QA
+        valueText = Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, col).Value))
+        If valueText <> "" Then
+            QuarterPlanRowHasTask = True
+            Exit Function
+        End If
+    Next col
+End Function
+
+Public Sub CompactQuarterPlanTable(ByVal tbl As ListObject, ByVal removedRowIndex As Long)
+    Dim rowCount As Long
+    Dim dataWidth As Long
+
+    rowCount = tbl.DataBodyRange.Rows.Count
+    dataWidth = PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1
+
+    If removedRowIndex < rowCount Then
+        tbl.DataBodyRange.Cells(removedRowIndex, PLAN_COL_DATA_FIRST).Resize(rowCount - removedRowIndex, dataWidth).Value = _
+            tbl.DataBodyRange.Cells(removedRowIndex + 1, PLAN_COL_DATA_FIRST).Resize(rowCount - removedRowIndex, dataWidth).Value
+    End If
+
+    tbl.DataBodyRange.Cells(rowCount, PLAN_COL_DATA_FIRST).Resize(1, dataWidth).ClearContents
+End Sub
+
+Public Sub ReloadQuarterPlanBacklogFromEstimates(Optional ByVal confirmReset As Boolean = True)
+    On Error GoTo Fail
+
+    Dim wsEstimate As Worksheet
+    Dim wsPlan As Worksheet
+    Dim estimateTbl As ListObject
+    Dim activeTbl As ListObject
+    Dim greyTbl As ListObject
+    Dim backlogTbl As ListObject
+    Dim skippedCount As Long
+    Dim oldEnableEvents As Boolean
+    Dim oldScreenUpdating As Boolean
+
+    If confirmReset Then
+        If MsgBox(QuarterPlanTextReloadConfirm(), vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+    End If
+
+    oldEnableEvents = Application.EnableEvents
+    oldScreenUpdating = Application.ScreenUpdating
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    Set wsEstimate = GetTaskEstimatesWorksheet()
+    Set wsPlan = GetQuarterPlanWorksheet()
+    If wsEstimate Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    If wsPlan Is Nothing Then Err.Raise 9, , "Quarter plan worksheet not found by tblPlanActive."
+    Set estimateTbl = wsEstimate.ListObjects("tblTaskEstimates")
+    Set activeTbl = wsPlan.ListObjects("tblPlanActive")
+    Set greyTbl = wsPlan.ListObjects("tblPlanGrey")
+    Set backlogTbl = wsPlan.ListObjects("tblPlanBacklog")
+
+    ClearQuarterPlanTaskData activeTbl
+    ClearQuarterPlanTaskData greyTbl
+    ClearQuarterPlanTaskData backlogTbl
+    skippedCount = LoadEstimateRowsToBacklogFast(estimateTbl, backlogTbl)
+
+    RefreshQuarterPlanTable backlogTbl
+
+    If skippedCount > 0 Then
+        MsgBox QuarterPlanTextBacklogFull() & CStr(skippedCount), vbExclamation
+    End If
+
+SafeExit:
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    Exit Sub
+
+Fail:
+    MsgBox "Ошибка ReloadQuarterPlanBacklogFromEstimates: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Sub ClearQuarterPlanTaskData(ByVal tbl As ListObject)
+    Dim rowCount As Long
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    rowCount = tbl.DataBodyRange.Rows.Count
+    tbl.DataBodyRange.Cells(1, 1).Resize(rowCount, PLAN_COL_ACTION_DOWN).ClearContents
+    tbl.DataBodyRange.Cells(1, PLAN_COL_DATA_FIRST).Resize(rowCount, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1).ClearContents
+
+    ClearQuarterPlanSchedule tbl
+End Sub
+
+Public Function LoadEstimateRowsToBacklogFast(ByVal sourceTbl As ListObject, ByVal backlogTbl As ListObject) As Long
+    Dim sourceValues As Variant
+    Dim levelValues As Variant
+    Dim taskIdValues As Variant
+    Dim parentIdValues As Variant
+    Dim targetValues() As Variant
+    Dim hasChildren() As Boolean
+    Dim sourceRowCount As Long
+    Dim targetRowCount As Long
+    Dim dataWidth As Long
+    Dim sourceRowIndex As Long
+    Dim targetRowIndex As Long
+    Dim parentRowIndex As Long
+    Dim levelValue As Long
+    Dim anValue As Double
+    Dim beValue As Double
+    Dim feValue As Double
+    Dim qaValue As Double
+
+    If sourceTbl.DataBodyRange Is Nothing Then Exit Function
+    If backlogTbl.DataBodyRange Is Nothing Then Exit Function
+
+    sourceRowCount = sourceTbl.DataBodyRange.Rows.Count
+    targetRowCount = backlogTbl.DataBodyRange.Rows.Count
+    dataWidth = PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1
+
+    sourceValues = sourceTbl.DataBodyRange.Value
+    levelValues = sourceTbl.Parent.Range(sourceTbl.Parent.Cells(sourceTbl.DataBodyRange.Row, EST_SHEET_COL_LEVEL), _
+        sourceTbl.Parent.Cells(sourceTbl.DataBodyRange.Row + sourceRowCount - 1, EST_SHEET_COL_LEVEL)).Value
+    taskIdValues = sourceTbl.Parent.Range(sourceTbl.Parent.Cells(sourceTbl.DataBodyRange.Row, EST_SHEET_COL_TASK_ID), _
+        sourceTbl.Parent.Cells(sourceTbl.DataBodyRange.Row + sourceRowCount - 1, EST_SHEET_COL_TASK_ID)).Value
+    parentIdValues = sourceTbl.Parent.Range(sourceTbl.Parent.Cells(sourceTbl.DataBodyRange.Row, EST_SHEET_COL_PARENT_TASK_ID), _
+        sourceTbl.Parent.Cells(sourceTbl.DataBodyRange.Row + sourceRowCount - 1, EST_SHEET_COL_PARENT_TASK_ID)).Value
+    ReDim hasChildren(1 To sourceRowCount)
+    ReDim targetValues(1 To targetRowCount, 1 To dataWidth)
+
+    For sourceRowIndex = 1 To sourceRowCount
+        If TaskEstimateArrayRowHasTask(sourceValues, sourceRowIndex) Then
+            parentRowIndex = TaskEstimateArrayRowById(taskIdValues, CStr(parentIdValues(sourceRowIndex, 1)), sourceRowCount)
+            If parentRowIndex > 0 Then hasChildren(parentRowIndex) = True
+        End If
+    Next sourceRowIndex
+
+    For sourceRowIndex = 1 To sourceRowCount
+        levelValue = TaskEstimateArrayLevel(levelValues(sourceRowIndex, 1))
+        If levelValue = 0 And TaskEstimateArrayRowHasTask(sourceValues, sourceRowIndex) Then
+            If targetRowIndex < targetRowCount Then
+                targetRowIndex = targetRowIndex + 1
+                targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 1) = sourceValues(sourceRowIndex, EST_COL_PRIORITY)
+                targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 2) = sourceValues(sourceRowIndex, EST_COL_DIRECTION)
+                targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 3) = sourceValues(sourceRowIndex, EST_COL_DESCRIPTION)
+                targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 4) = sourceValues(sourceRowIndex, EST_COL_TICKET)
+                targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 5) = sourceValues(sourceRowIndex, EST_COL_NOTE)
+                TaskEstimateArrayEffectiveEstimates sourceValues, levelValues, hasChildren, sourceRowIndex, sourceRowCount, anValue, beValue, feValue, qaValue
+                If anValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_AN - PLAN_COL_DATA_FIRST + 1) = anValue
+                If beValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_BE - PLAN_COL_DATA_FIRST + 1) = beValue
+                If feValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_FE - PLAN_COL_DATA_FIRST + 1) = feValue
+                If qaValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1) = qaValue
+                targetValues(targetRowIndex, PLAN_COL_COMMENT - PLAN_COL_DATA_FIRST + 1) = sourceValues(sourceRowIndex, EST_COL_COMMENT)
+            Else
+                LoadEstimateRowsToBacklogFast = LoadEstimateRowsToBacklogFast + 1
+            End If
+        End If
+    Next sourceRowIndex
+
+    backlogTbl.DataBodyRange.Cells(1, PLAN_COL_DATA_FIRST).Resize(targetRowCount, dataWidth).Value = targetValues
+    ClearQuarterPlanSchedule backlogTbl
+End Function
+
+Public Function TaskEstimateArrayRowById(ByRef taskIdValues As Variant, ByVal taskId As String, ByVal rowCount As Long) As Long
+    Dim rowIndex As Long
+    Dim normalizedTaskId As String
+
+    normalizedTaskId = Trim$(taskId)
+    If normalizedTaskId = "" Then Exit Function
+
+    For rowIndex = 1 To rowCount
+        If Trim$(CStr(taskIdValues(rowIndex, 1))) = normalizedTaskId Then
+            TaskEstimateArrayRowById = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function TaskEstimateArrayLevel(ByVal rawValue As Variant) As Long
+    Dim result As Long
+
+    If IsNumeric(rawValue) Then result = CLng(rawValue)
+    If result < 0 Then result = 0
+    If result > EST_MAX_DECOMPOSITION_LEVEL Then result = EST_MAX_DECOMPOSITION_LEVEL
+    TaskEstimateArrayLevel = result
+End Function
+
+Public Function TaskEstimateArrayRowHasTask(ByRef values As Variant, ByVal rowIndex As Long) As Boolean
+    TaskEstimateArrayRowHasTask = TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_PRIORITY) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_DIRECTION) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_DESCRIPTION) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_TICKET) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_NOTE) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_AN) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_BE) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_FE) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_QA)
+End Function
+
+Public Function TaskEstimateArrayCellHasValue(ByRef values As Variant, ByVal rowIndex As Long, ByVal colIndex As Long) As Boolean
+    TaskEstimateArrayCellHasValue = (Trim$(CStr(values(rowIndex, colIndex))) <> "")
+End Function
+
+Public Sub TaskEstimateArrayEffectiveEstimates(ByRef values As Variant, ByRef levelValues As Variant, ByRef hasChildren() As Boolean, ByVal rootRowIndex As Long, ByVal rowCount As Long, ByRef anValue As Double, ByRef beValue As Double, ByRef feValue As Double, ByRef qaValue As Double)
+    Dim scanRow As Long
+    Dim scanLevel As Long
+
+    anValue = 0
+    beValue = 0
+    feValue = 0
+    qaValue = 0
+
+    If Not hasChildren(rootRowIndex) Then
+        anValue = NzDouble(values(rootRowIndex, EST_COL_AN))
+        beValue = NzDouble(values(rootRowIndex, EST_COL_BE))
+        feValue = NzDouble(values(rootRowIndex, EST_COL_FE))
+        qaValue = NzDouble(values(rootRowIndex, EST_COL_QA))
+        Exit Sub
+    End If
+
+    For scanRow = rootRowIndex + 1 To rowCount
+        If Not TaskEstimateArrayRowHasTask(values, scanRow) Then Exit For
+        scanLevel = TaskEstimateArrayLevel(levelValues(scanRow, 1))
+        If scanLevel = 0 Then Exit For
+        If Not hasChildren(scanRow) Then
+            anValue = anValue + NzDouble(values(scanRow, EST_COL_AN))
+            beValue = beValue + NzDouble(values(scanRow, EST_COL_BE))
+            feValue = feValue + NzDouble(values(scanRow, EST_COL_FE))
+            qaValue = qaValue + NzDouble(values(scanRow, EST_COL_QA))
+        End If
+    Next scanRow
+End Sub
+
+Public Sub RefreshQuarterPlanTable(ByVal tbl As ListObject)
+    Dim rowIndex As Long
+    Dim rowCount As Long
+    Dim actionToPlan As String
+    Dim actionToGrey As String
+    Dim actionToBacklog As String
+    Dim actionUp As String
+    Dim actionDown As String
+    Dim actionValues() As Variant
+    Dim dataValues As Variant
+    Dim dataCol As Long
+    Dim rowHasTask As Boolean
+    Dim previousTaskRow As Long
+    Dim actionRange As Range
+    Dim effortRange As Range
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    rowCount = tbl.DataBodyRange.Rows.Count
+    ReDim actionValues(1 To rowCount, 1 To PLAN_COL_ACTION_DOWN)
+    dataValues = tbl.DataBodyRange.Cells(1, PLAN_COL_DATA_FIRST).Resize(rowCount, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1).Value
+
+    actionToPlan = QuarterPlanTextAddToPlan()
+    actionToGrey = QuarterPlanTextToGrey()
+    actionToBacklog = QuarterPlanTextToBacklog()
+    actionUp = QuarterPlanTextMoveUp()
+    actionDown = QuarterPlanTextMoveDown()
+
+    For rowIndex = 1 To rowCount
+        rowHasTask = False
+        For dataCol = 1 To UBound(dataValues, 2)
+            If Trim$(CStr(dataValues(rowIndex, dataCol))) <> "" Then
+                rowHasTask = True
+                Exit For
+            End If
+        Next dataCol
+
+        If rowHasTask Then
+            Select Case tbl.Name
+                Case "tblPlanActive"
+                    actionValues(rowIndex, PLAN_COL_ACTION_TO_GREY) = actionToGrey
+                    actionValues(rowIndex, PLAN_COL_ACTION_TO_BACKLOG) = actionToBacklog
+                Case "tblPlanGrey"
+                    actionValues(rowIndex, PLAN_COL_ACTION_TO_BACKLOG) = actionToBacklog
+                Case "tblPlanBacklog"
+                    actionValues(rowIndex, PLAN_COL_ACTION_TO_PLAN) = actionToPlan
+            End Select
+
+            If previousTaskRow > 0 Then
+                actionValues(rowIndex, PLAN_COL_ACTION_UP) = actionUp
+                actionValues(previousTaskRow, PLAN_COL_ACTION_DOWN) = actionDown
+            End If
+            previousTaskRow = rowIndex
+        End If
+    Next rowIndex
+
+    Set actionRange = tbl.DataBodyRange.Cells(1, 1).Resize(rowCount, PLAN_COL_ACTION_DOWN)
+    actionRange.Value = actionValues
+    actionRange.Font.Name = DESIGN_FONT_NAME
+    actionRange.Font.Size = DESIGN_FONT_SIZE
+    actionRange.Font.Color = RGB(255, 255, 255)
+    actionRange.Font.Bold = True
+    actionRange.Font.Underline = False
+    actionRange.HorizontalAlignment = xlCenter
+    actionRange.VerticalAlignment = xlCenter
+
+    Set effortRange = tbl.ListColumns(PLAN_COL_EFFORT).DataBodyRange
+    effortRange.FormulaR1C1 = "=IF(COUNTA(RC[-8]:RC[-1])=0,"""",IFERROR(IF(RC[-4]="""",0,CEILING(RC[-4]/'02_Capacity'!R20C5,1))+IF(RC[-3]="""",0,CEILING(RC[-3]/'02_Capacity'!R20C5,1))+IF(RC[-2]="""",0,CEILING(RC[-2]/'02_Capacity'!R20C5,1))+IF(RC[-1]="""",0,CEILING(RC[-1]/'02_Capacity'!R20C5,1)),""""))"
+End Sub
+
+Public Sub RecalculateQuarterPlan()
+    On Error GoTo Fail
+
+    Dim wsPlan As Worksheet, wsQuarter As Worksheet, wsRefs As Worksheet, wsCapacity As Worksheet, wsSettings As Worksheet
+    Dim activeTbl As ListObject, greyTbl As ListObject, backlogTbl As ListObject, memberTbl As ListObject, ruleTbl As ListObject, holidayTbl As ListObject
+    Dim tasks() As Variant, resources As Variant, holidays As Variant, rules As Variant, results As Variant
+    Dim rowIndex As Long, techIndex As Long, rowCount As Long
+    Dim firstWorkDate As Date, focusFactor As Double, diagnostic As String
+
+    Application.EnableEvents = False
+    Set wsPlan = GetQuarterPlanWorksheet()
+    Set wsQuarter = GetQuarterSettingsWorksheet()
+    Set wsRefs = GetRefsWorksheet()
+    Set wsSettings = FindWorksheetByTableName("tblTeamMembers")
+    Set wsCapacity = ThisWorkbook.Worksheets(SHEET_CAPACITY)
+    If wsPlan Is Nothing Then Err.Raise 9, , "Quarter plan worksheet not found by tblPlanActive."
+    If wsQuarter Is Nothing Then Err.Raise 9, , "Quarter settings worksheet not found by tblHolidays."
+    If wsRefs Is Nothing Then Err.Raise 9, , "References worksheet not found by tblPlanningRuleSettings."
+    If wsSettings Is Nothing Then Err.Raise 9, , "Settings worksheet not found by tblTeamMembers."
+
+    Set activeTbl = wsPlan.ListObjects("tblPlanActive")
+    Set greyTbl = wsPlan.ListObjects("tblPlanGrey")
+    Set backlogTbl = wsPlan.ListObjects("tblPlanBacklog")
+    Set memberTbl = wsSettings.ListObjects("tblTeamMembers")
+    Set ruleTbl = wsRefs.ListObjects("tblPlanningRuleSettings")
+    Set holidayTbl = wsQuarter.ListObjects("tblHolidays")
+    ApplyQuarterPlanDateFormats wsPlan
+    ClearQuarterPlanSchedule activeTbl
+    ClearQuarterPlanSchedule greyTbl
+    ClearQuarterPlanSchedule backlogTbl
+
+    If Not IsDate(wsQuarter.Range("B4").Value) Then MarkQuarterPlanDiagnostics activeTbl, "Quarter start date is missing.": GoTo SafeExit
+    firstWorkDate = CDate(wsQuarter.Range("B4").Value)
+    focusFactor = NzDouble(wsCapacity.Range("E20").Value)
+    If focusFactor <= 0 Then MarkQuarterPlanDiagnostics activeTbl, "Core team focus factor is missing or <= 0.": GoTo SafeExit
+    If Not BuildQuarterPlanRuleMatrix(ruleTbl, rules, diagnostic) Then MarkQuarterPlanDiagnostics activeTbl, diagnostic: GoTo SafeExit
+
+    resources = BuildQuarterPlanResourceMatrix(memberTbl)
+    holidays = BuildQuarterPlanHolidayArray(holidayTbl)
+    rowCount = activeTbl.DataBodyRange.Rows.Count
+    ReDim tasks(1 To rowCount, 1 To 6)
+    For rowIndex = 1 To rowCount
+        If QuarterPlanRowHasTask(activeTbl, rowIndex) Then
+            tasks(rowIndex, 1) = True
+            tasks(rowIndex, 2) = QuarterPlanStatusCode(CStr(activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_STATUS).Value))
+            tasks(rowIndex, 3) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_AN).Value
+            tasks(rowIndex, 4) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_BE).Value
+            tasks(rowIndex, 5) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_FE).Value
+            tasks(rowIndex, 6) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_QA).Value
+        End If
+    Next rowIndex
+
+    results = QuarterPlanSchedule(tasks, resources, holidays, rules, firstWorkDate, focusFactor)
+    For rowIndex = 1 To rowCount
+        If QuarterPlanRowHasTask(activeTbl, rowIndex) Then
+            activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_EFFORT).Value = results(rowIndex, 1)
+            If IsDate(results(rowIndex, 2)) Then activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_READY_DATE).Value = results(rowIndex, 2)
+            For techIndex = 1 To 13
+                wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_AN_DAYS + techIndex - 1).Value = results(rowIndex, techIndex + 2)
+            Next techIndex
+        End If
+    Next rowIndex
+
+SafeExit:
+    Application.EnableEvents = True
+    Exit Sub
+Fail:
+    MsgBox "Ошибка RecalculateQuarterPlan: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Function BuildQuarterPlanRuleMatrix(ByVal tbl As ListObject, ByRef rules As Variant, ByRef diagnostic As String) As Boolean
+    Dim result(1 To 5, 1 To 2) As Variant, value As Double
+    result(1, 1) = "AN_BE_MIN_WORKDAYS": If Not TryReadPlanningRuleValue(tbl, result(1, 1), 0, 1000, True, value, diagnostic) Then Exit Function Else result(1, 2) = value
+    result(2, 1) = "AN_BE_COMPLETION_PERCENT": If Not TryReadPlanningRuleValue(tbl, result(2, 1), 0, 1, False, value, diagnostic) Then Exit Function Else result(2, 2) = value
+    result(3, 1) = "BE_FE_MIN_WORKDAYS": If Not TryReadPlanningRuleValue(tbl, result(3, 1), 0, 1000, True, value, diagnostic) Then Exit Function Else result(3, 2) = value
+    result(4, 1) = "BE_FE_COMPLETION_PERCENT": If Not TryReadPlanningRuleValue(tbl, result(4, 1), 0, 1, False, value, diagnostic) Then Exit Function Else result(4, 2) = value
+    result(5, 1) = "QA_FIRST_PART_PERCENT": If Not TryReadPlanningRuleValue(tbl, result(5, 1), 0, 1, False, value, diagnostic) Then Exit Function Else result(5, 2) = value
+    rules = result
+    BuildQuarterPlanRuleMatrix = True
+End Function
+
+Public Function BuildQuarterPlanResourceMatrix(ByVal tbl As ListObject) As Variant
+    Dim result() As Variant, count As Long, rowIndex As Long, targetRow As Long, expertise As String, allocation As Double
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        expertise = QuarterPlanExpertiseForRole(CStr(tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_ROLE).Value))
+        allocation = NzDouble(tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_ALLOCATION).Value)
+        If expertise <> "" And allocation > 0 Then count = count + 1
+    Next rowIndex
+    If count = 0 Then Exit Function
+    ReDim result(1 To count, 1 To 8)
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        expertise = QuarterPlanExpertiseForRole(CStr(tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_ROLE).Value))
+        allocation = NzDouble(tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_ALLOCATION).Value)
+        If expertise <> "" And allocation > 0 Then
+            targetRow = targetRow + 1
+            result(targetRow, 1) = expertise: result(targetRow, 2) = allocation
+            result(targetRow, 3) = tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_VACATION1_START).Value
+            result(targetRow, 4) = tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_VACATION1_END).Value
+            result(targetRow, 5) = tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_VACATION2_START).Value
+            result(targetRow, 6) = tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_VACATION2_END).Value
+            result(targetRow, 7) = tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_VACATION3_START).Value
+            result(targetRow, 8) = tbl.DataBodyRange.Cells(rowIndex, TEAM_MEMBER_COL_VACATION3_END).Value
+        End If
+    Next rowIndex
+    BuildQuarterPlanResourceMatrix = result
+End Function
+
+Public Function BuildQuarterPlanHolidayArray(ByVal tbl As ListObject) As Variant
+    Dim result() As Variant, count As Long, rowIndex As Long, yesText As String
+    yesText = ChrW$(&H414) & ChrW$(&H430)
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If IsDate(tbl.DataBodyRange.Cells(rowIndex, 1).Value) And Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, 4).Value)) = yesText Then count = count + 1
+    Next rowIndex
+    If count = 0 Then BuildQuarterPlanHolidayArray = Array(): Exit Function
+    ReDim result(1 To count)
+    count = 0
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If IsDate(tbl.DataBodyRange.Cells(rowIndex, 1).Value) And Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, 4).Value)) = yesText Then count = count + 1: result(count) = CDate(tbl.DataBodyRange.Cells(rowIndex, 1).Value)
+    Next rowIndex
+    BuildQuarterPlanHolidayArray = result
+End Function
+
+Public Function QuarterPlanStatusCode(ByVal statusText As String) As String
+    statusText = Trim$(statusText)
+    If statusText = PLAN_STATUS_ANALYSIS_READY Then QuarterPlanStatusCode = "AN" Else If statusText = PLAN_STATUS_DEV_READY Then QuarterPlanStatusCode = "DEV" Else If statusText = PLAN_STATUS_BACKEND_READY Then QuarterPlanStatusCode = "BE" Else If statusText = PLAN_STATUS_FRONTEND_READY Then QuarterPlanStatusCode = "FE" Else If statusText = PLAN_STATUS_DEFERRED Then QuarterPlanStatusCode = "DEFER" Else QuarterPlanStatusCode = "FULL"
+End Function
+
+Public Function QuarterPlanExpertiseForRole(ByVal roleText As String) As String
+    If IsPlanRoleForExpertise(Trim$(roleText), "AN") Then QuarterPlanExpertiseForRole = "AN" Else If IsPlanRoleForExpertise(Trim$(roleText), "BE") Then QuarterPlanExpertiseForRole = "BE" Else If IsPlanRoleForExpertise(Trim$(roleText), "FE") Then QuarterPlanExpertiseForRole = "FE" Else If IsPlanRoleForExpertise(Trim$(roleText), "QA") Then QuarterPlanExpertiseForRole = "QA"
+End Function
+
+
+
+Public Function TryReadPlanningRuleValue(ByVal tbl As ListObject, ByVal ruleCode As String, ByVal minValue As Double, ByVal maxValue As Double, ByVal requireWhole As Boolean, ByRef result As Double, ByRef diagnostic As String) As Boolean
+    Dim rowIndex As Long
+    Dim codeText As String
+    Dim rawValue As Variant
+    Dim numericValue As Double
+
+    If tbl.DataBodyRange Is Nothing Then
+        diagnostic = "Planning rule settings table is empty."
+        Exit Function
+    End If
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        codeText = Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, 1).Value))
+        If codeText = ruleCode Then
+            rawValue = tbl.DataBodyRange.Cells(rowIndex, 3).Value
+            If Not IsNumeric(rawValue) Then
+                diagnostic = "Planning rule has non-numeric value: " & ruleCode & "."
+                Exit Function
+            End If
+
+            numericValue = CDbl(rawValue)
+            If numericValue < minValue Or numericValue > maxValue Then
+                diagnostic = "Planning rule is outside allowed range: " & ruleCode & "."
+                Exit Function
+            End If
+
+            If requireWhole And numericValue <> Fix(numericValue) Then
+                diagnostic = "Planning rule must be a whole number: " & ruleCode & "."
+                Exit Function
+            End If
+
+            result = numericValue
+            TryReadPlanningRuleValue = True
+            Exit Function
+        End If
+    Next rowIndex
+
+    diagnostic = "Planning rule is missing: " & ruleCode & "."
+End Function
+
+
+
+Public Sub ClearQuarterPlanSchedule(ByVal tbl As ListObject)
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+    tbl.ListColumns(PLAN_COL_READY_DATE).DataBodyRange.ClearContents
+    tbl.Parent.Range(PLAN_TECH_FIRST_COL_LETTER & tbl.DataBodyRange.Row & ":" & PLAN_TECH_LAST_COL_LETTER & (tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1)).ClearContents
+End Sub
+
+Public Sub ClearQuarterPlanRowSchedule(ByVal rowRange As Range)
+    If rowRange Is Nothing Then Exit Sub
+    rowRange.Cells(1, PLAN_COL_READY_DATE).ClearContents
+    rowRange.Worksheet.Range(PLAN_TECH_FIRST_COL_LETTER & rowRange.Row & ":" & PLAN_TECH_LAST_COL_LETTER & rowRange.Row).ClearContents
+End Sub
+
+Public Sub MarkQuarterPlanDiagnostics(ByVal tbl As ListObject, ByVal message As String)
+    Dim rowIndex As Long
+    Dim sheetRow As Long
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If QuarterPlanRowHasTask(tbl, rowIndex) Then
+            sheetRow = tbl.DataBodyRange.Row + rowIndex - 1
+            tbl.DataBodyRange.Cells(rowIndex, PLAN_COL_EFFORT).ClearContents
+            tbl.DataBodyRange.Cells(rowIndex, PLAN_COL_READY_DATE).ClearContents
+            tbl.Parent.Cells(sheetRow, PLAN_SHEET_COL_DIAGNOSTIC).Value = message
+        End If
+    Next rowIndex
+End Sub
+
+Public Function NzDouble(ByVal value As Variant) As Double
+    If IsError(value) Or IsEmpty(value) Or Trim$(CStr(value)) = "" Then
+        NzDouble = 0
+    ElseIf IsNumeric(value) Then
+        NzDouble = CDbl(value)
+    Else
+        NzDouble = 0
+    End If
+End Function
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Public Function IsPlanRoleForExpertise(ByVal roleText As String, ByVal expertiseCode As String) As Boolean
+    Select Case expertiseCode
+        Case "AN"
+            IsPlanRoleForExpertise = (roleText = PlanRoleAnalyst() Or roleText = PlanRoleAnalysisLead())
+        Case "BE"
+            IsPlanRoleForExpertise = (roleText = PlanRoleBackendDeveloper() Or roleText = PlanRoleTeamLead())
+        Case "FE"
+            IsPlanRoleForExpertise = (roleText = PlanRoleFrontendDeveloper())
+        Case "QA"
+            IsPlanRoleForExpertise = (roleText = PlanRoleTester())
+    End Select
+End Function
+
+Public Function PlanRoleAnalyst() As String
+    PlanRoleAnalyst = TextFromCodes(1040, 1085, 1072, 1083, 1080, 1090, 1080, 1082)
+End Function
+
+Public Function PlanRoleAnalysisLead() As String
+    PlanRoleAnalysisLead = TextFromCodes(1051, 1080, 1076, 32, 1087, 1086, 32, 1072, 1085, 1072, 1083, 1080, 1090, 1080, 1082, 1077)
+End Function
+
+Public Function PlanRoleBackendDeveloper() As String
+    PlanRoleBackendDeveloper = TextFromCodes(1056, 1072, 1079, 1088, 1072, 1073, 1086, 1090, 1095, 1080, 1082, 32, 1073, 1101, 1082, 1077, 1085, 1076)
+End Function
+
+Public Function PlanRoleFrontendDeveloper() As String
+    PlanRoleFrontendDeveloper = TextFromCodes(1056, 1072, 1079, 1088, 1072, 1073, 1086, 1090, 1095, 1080, 1082, 32, 1092, 1088, 1086, 1085, 1090, 1077, 1085, 1076)
+End Function
+
+Public Function PlanRoleTester() As String
+    PlanRoleTester = TextFromCodes(1058, 1077, 1089, 1090, 1080, 1088, 1086, 1074, 1097, 1080, 1082)
+End Function
+
+Public Function PlanRoleTeamLead() As String
+    PlanRoleTeamLead = TextFromCodes(1058, 1080, 1084, 45, 1083, 1080, 1076, 32, 47, 32, 1090, 1077, 1093, 1083, 1080, 1076)
+End Function

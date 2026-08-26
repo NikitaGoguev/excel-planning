@@ -1,10 +1,12 @@
 {
   "tables": {
-    "tblPlanBacklog": "A55:S155"
+    "tblPlanBacklog": { "layout": "backlog.tableRange" }
   },
   "requiredCells": {
-    "A54": "++",
     "Q2": "Экспорт плана"
+  },
+  "requiredLayoutCells": {
+    "backlog.actionCell": "++"
   },
   "visibleColumns": ["T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"]
 }

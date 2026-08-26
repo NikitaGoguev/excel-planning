@@ -1,0 +1,1155 @@
+Option Explicit
+Option Private Module
+
+Public Sub ButtonImportTaskEstimatesCsv()
+    On Error GoTo Fail
+
+    Dim selectedFile As Variant
+
+    selectedFile = Application.GetOpenFilename("CSV (*.csv),*.csv", , TaskEstimateTextImportTasksCsvTitle())
+    If VarType(selectedFile) = vbBoolean Then Exit Sub
+
+    ImportTaskEstimatesCsvFile CStr(selectedFile), TASK_IMPORT_MODE_PROMPT, True
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ButtonImportTaskEstimatesCsv: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub ImportTaskEstimatesFromCsvPath(ByVal csvPath As String, ByVal replaceExisting As Boolean)
+    If replaceExisting Then
+        ImportTaskEstimatesCsvFile csvPath, TASK_IMPORT_MODE_REPLACE, False, False
+    Else
+        ImportTaskEstimatesCsvFile csvPath, TASK_IMPORT_MODE_APPEND, False, False
+    End If
+End Sub
+
+Public Sub ButtonImportTaskEstimatesXlsx()
+    On Error GoTo Fail
+
+    Dim selectedFile As Variant
+
+    selectedFile = Application.GetOpenFilename("Excel (*.xlsx),*.xlsx", , TaskEstimateTextImportEstimateTitle())
+    If VarType(selectedFile) = vbBoolean Then Exit Sub
+
+    ImportTaskEstimatesXlsxFile CStr(selectedFile), True, True
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ButtonImportTaskEstimatesXlsx: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub ImportTaskEstimatesFromXlsxPath(ByVal xlsxPath As String)
+    ImportTaskEstimatesXlsxFile xlsxPath, False, False
+End Sub
+
+Public Sub ButtonClearTaskEstimates()
+    On Error GoTo Fail
+
+    Dim answer As VbMsgBoxResult
+
+    answer = MsgBox(TaskEstimateTextClearPrompt(), vbYesNo + vbQuestion, TaskEstimateTextClearTitle())
+    If answer <> vbYes Then Exit Sub
+
+    ClearTaskEstimatesData
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ButtonClearTaskEstimates: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub ButtonRefreshTaskEstimates()
+    On Error GoTo Fail
+
+    RefreshTaskEstimateActionGrid
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ButtonRefreshTaskEstimates: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub ButtonExportTaskEstimatesXlsx()
+    On Error GoTo Fail
+
+    Dim selectedFile As Variant
+
+    selectedFile = PromptForXlsxExportPath(DefaultTaskEstimateExportFileName(), TaskEstimateTextExportEstimateTitle())
+    If VarType(selectedFile) = vbBoolean Then Exit Sub
+
+    ExportTaskEstimatesToXlsxFile CStr(selectedFile), True, False
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ButtonExportTaskEstimatesXlsx: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub ExportTaskEstimatesToXlsxPath(ByVal exportPath As String)
+    ExportTaskEstimatesToXlsxFile exportPath, False, True
+End Sub
+
+Public Sub ExportTaskEstimateExpressToPath(ByVal rowIndex As Long, ByVal exportPath As String)
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    ExportTaskEstimateExpressFile tbl, rowIndex, exportPath, False, True
+End Sub
+
+Public Sub ExportQuarterPlanBacklogWithPrompt()
+    On Error GoTo Fail
+
+    Dim selectedFile As Variant
+
+    selectedFile = PromptForXlsxExportPath(DefaultQuarterPlanBacklogExportFileName(), QuarterPlanTextExportBacklog())
+    If VarType(selectedFile) = vbBoolean Then Exit Sub
+
+    ExportQuarterPlanBacklogToXlsxFile CStr(selectedFile), True, False
+    Exit Sub
+
+Fail:
+    MsgBox "Ошибка ExportQuarterPlanBacklogWithPrompt: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub ExportQuarterPlanBacklogToXlsxPath(ByVal exportPath As String)
+    ExportQuarterPlanBacklogToXlsxFile exportPath, False, True
+End Sub
+
+Public Sub ClearTaskEstimatesData()
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim restoredTemplate As Boolean
+    Dim rowIndex As Long
+    Dim maxRows As Long
+    Dim oldEnableEvents As Boolean
+    Dim oldScreenUpdating As Boolean
+
+    oldEnableEvents = Application.EnableEvents
+    oldScreenUpdating = Application.ScreenUpdating
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    restoredTemplate = RestoreTaskEstimateTemplate(ws, tbl)
+    If restoredTemplate Then
+        RemoveTaskEstimateActionButtons ws
+        mTaskEstimateMaxActionRow = 0
+        MarkTaskEstimateRefreshFrom 1
+    End If
+
+    If tbl.DataBodyRange Is Nothing Then Err.Raise 9, , "tblTaskEstimates has no data body range."
+
+    maxRows = tbl.DataBodyRange.Rows.Count
+    For rowIndex = 1 To maxRows
+        ClearTaskEstimateRow tbl, rowIndex
+    Next rowIndex
+
+    mTaskEstimateMaxActionRow = maxRows
+    MarkTaskEstimateRefreshFrom 1
+    RefreshTaskEstimateTable tbl
+    AddTaskEstimateTopButtons ws
+    SyncTaskEstimateActionButtons ws
+
+SafeExit:
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ClearTaskEstimatesData: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Function ExportTaskEstimatesToXlsxFile(ByVal exportPath As String, ByVal showMessages As Boolean, ByVal allowOverwrite As Boolean) As Long
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim exportWb As Workbook
+    Dim exportWs As Worksheet
+    Dim lastRow As Long
+    Dim rowIndex As Long
+    Dim outRow As Long
+    Dim colIndex As Long
+    Dim normalizedPath As String
+    Dim oldEnableEvents As Boolean
+    Dim oldScreenUpdating As Boolean
+    Dim oldDisplayAlerts As Boolean
+
+    oldEnableEvents = Application.EnableEvents
+    oldScreenUpdating = Application.ScreenUpdating
+    oldDisplayAlerts = Application.DisplayAlerts
+
+    normalizedPath = EnsureXlsxExtension(Trim$(exportPath))
+    If normalizedPath = "" Then Err.Raise 5, , "Export path is empty."
+    If Dir$(normalizedPath) <> "" And Not allowOverwrite Then
+        If MsgBox(TaskEstimateTextFileExistsPrompt() & vbCrLf & normalizedPath, vbYesNo + vbQuestion, TaskEstimateTextExportDialogTitle()) <> vbYes Then Exit Function
+    End If
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl.DataBodyRange Is Nothing Then Err.Raise 9, , "tblTaskEstimates has no data body range."
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    RefreshTaskEstimateTable tbl
+    lastRow = LastTaskEstimateUsedRow(tbl)
+    If lastRow = 0 Then
+        If showMessages Then
+        MsgBox TaskEstimateTextNoTasksForExport(), vbInformation
+            GoTo SafeExit
+        Else
+            Err.Raise 5, , "No task estimate rows to export."
+        End If
+    End If
+
+    Set exportWb = Application.Workbooks.Add(xlWBATWorksheet)
+    Set exportWs = exportWb.Worksheets(1)
+    exportWs.Name = TaskEstimateTextSheetName()
+    exportWs.Cells.Font.Name = DESIGN_FONT_NAME
+    exportWs.Cells.Font.Size = DESIGN_FONT_SIZE
+
+    For colIndex = EST_COL_PRIORITY To EST_COL_LAST
+        exportWs.Cells(1, colIndex - EST_COL_PRIORITY + 1).Value = tbl.HeaderRowRange.Cells(1, colIndex).Value
+        exportWs.Columns(colIndex - EST_COL_PRIORITY + 1).ColumnWidth = tbl.Parent.Columns(tbl.Range.Column + colIndex - 1).ColumnWidth
+    Next colIndex
+
+    outRow = 2
+    For rowIndex = 1 To lastRow
+        If TaskEstimateRowHasTask(tbl, rowIndex) Then
+            For colIndex = EST_COL_PRIORITY To EST_COL_LAST
+                exportWs.Cells(outRow, colIndex - EST_COL_PRIORITY + 1).Value = tbl.DataBodyRange.Cells(rowIndex, colIndex).Value
+                exportWs.Cells(outRow, colIndex - EST_COL_PRIORITY + 1).NumberFormat = tbl.DataBodyRange.Cells(rowIndex, colIndex).NumberFormat
+            Next colIndex
+            exportWs.Cells(outRow, EST_COL_DESCRIPTION - EST_COL_PRIORITY + 1).IndentLevel = tbl.DataBodyRange.Cells(rowIndex, EST_COL_DESCRIPTION).IndentLevel
+            outRow = outRow + 1
+        End If
+    Next rowIndex
+
+    With exportWs.Range(exportWs.Cells(1, 1), exportWs.Cells(1, EST_COL_LAST - EST_COL_PRIORITY + 1))
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Bold = True
+        .Interior.Color = RGB(217, 234, 247)
+        .HorizontalAlignment = xlCenter
+    End With
+    exportWs.Range(exportWs.Cells(1, 1), exportWs.Cells(outRow - 1, EST_COL_LAST - EST_COL_PRIORITY + 1)).Borders.LineStyle = xlContinuous
+    exportWs.Range(exportWs.Cells(2, EST_COL_AN - EST_COL_PRIORITY + 1), exportWs.Cells(outRow - 1, EST_COL_QA - EST_COL_PRIORITY + 1)).NumberFormat = "0.00"
+    exportWs.Rows(1).AutoFilter
+
+    Application.DisplayAlerts = False
+    exportWb.SaveAs Filename:=normalizedPath, FileFormat:=xlOpenXMLWorkbook
+    Application.DisplayAlerts = oldDisplayAlerts
+
+    ExportTaskEstimatesToXlsxFile = outRow - 2
+    If showMessages Then MsgBox TaskEstimateTextExportedTasks() & CStr(ExportTaskEstimatesToXlsxFile) & vbCrLf & normalizedPath, vbInformation
+
+SafeExit:
+    On Error Resume Next
+    If Not exportWb Is Nothing Then exportWb.Close SaveChanges:=False
+    Application.DisplayAlerts = oldDisplayAlerts
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    On Error GoTo 0
+    Exit Function
+
+Fail:
+    If showMessages Then
+        MsgBox TaskEstimateTextErrorPrefix() & "ExportTaskEstimatesToXlsxFile: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+            "Path: " & exportPath, vbExclamation
+    Else
+        Err.Raise Err.Number, "ExportTaskEstimatesToXlsxFile", Err.Description
+    End If
+    Resume SafeExit
+End Function
+
+Public Function ImportTaskEstimatesXlsxFile(ByVal xlsxPath As String, ByVal showSuccess As Boolean, Optional ByVal showErrors As Boolean = True) As Long
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim importWb As Workbook
+    Dim importWs As Worksheet
+    Dim importedValues() As Variant
+    Dim importedLevels() As Long
+    Dim rowIndex As Long
+    Dim colIndex As Long
+    Dim lastImportRow As Long
+    Dim importedCount As Long
+    Dim maxRows As Long
+    Dim usedRows As Long
+    Dim targetStartRow As Long
+    Dim targetRow As Long
+    Dim taskLevel As Long
+    Dim previousLevel As Long
+    Dim parentIds(0 To EST_MAX_DECOMPOSITION_LEVEL) As String
+    Dim currentId As String
+    Dim oldEnableEvents As Boolean
+    Dim oldScreenUpdating As Boolean
+    Dim oldDisplayAlerts As Boolean
+
+    oldEnableEvents = Application.EnableEvents
+    oldScreenUpdating = Application.ScreenUpdating
+    oldDisplayAlerts = Application.DisplayAlerts
+
+    If Trim$(xlsxPath) = "" Then Err.Raise 5, , "XLSX path is empty."
+    If Dir$(xlsxPath) = "" Then Err.Raise 53, , "XLSX file not found."
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl.DataBodyRange Is Nothing Then Err.Raise 9, , "tblTaskEstimates has no data body range."
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    Set importWb = Application.Workbooks.Open(Filename:=xlsxPath, UpdateLinks:=0, ReadOnly:=True)
+    Set importWs = importWb.Worksheets(1)
+    ValidateTaskEstimateXlsxHeaders importWs
+
+    lastImportRow = LastTaskEstimateImportXlsxRow(importWs)
+    If lastImportRow < 2 Then Err.Raise 5, , "XLSX file has no task rows to import."
+
+    ReDim importedValues(1 To lastImportRow - 1, 1 To EST_COL_COMMENT)
+    ReDim importedLevels(1 To lastImportRow - 1)
+    previousLevel = 0
+
+    For rowIndex = 2 To lastImportRow
+        If Not TaskEstimateImportXlsxRowHasData(importWs, rowIndex) Then
+            Err.Raise 5, , "XLSX contains an empty task row before the end of imported data. Row: " & CStr(rowIndex)
+        End If
+
+        taskLevel = CLng(importWs.Cells(rowIndex, EST_COL_DESCRIPTION).IndentLevel)
+        If taskLevel < 0 Or taskLevel > EST_MAX_DECOMPOSITION_LEVEL Then
+            Err.Raise 5, , "Unsupported task indentation level at row " & CStr(rowIndex) & ": " & CStr(taskLevel)
+        End If
+        If rowIndex = 2 And taskLevel <> 0 Then
+            Err.Raise 5, , "First imported task must be a root task."
+        End If
+        If taskLevel > previousLevel + 1 Then
+            Err.Raise 5, , "XLSX task hierarchy skips a level at row " & CStr(rowIndex) & "."
+        End If
+
+        importedCount = importedCount + 1
+        importedLevels(importedCount) = taskLevel
+        For colIndex = EST_COL_PRIORITY To EST_COL_COMMENT
+            importedValues(importedCount, colIndex) = importWs.Cells(rowIndex, colIndex).Value
+        Next colIndex
+        previousLevel = taskLevel
+    Next rowIndex
+
+    maxRows = tbl.DataBodyRange.Rows.Count
+    usedRows = LastTaskEstimateUsedRow(tbl)
+    If importedCount > maxRows - usedRows Then
+        Err.Raise 5, , "XLSX contains " & CStr(importedCount) & " task rows, but only " & CStr(maxRows - usedRows) & " rows are available for append import."
+    End If
+
+    targetStartRow = usedRows + 1
+    For rowIndex = 1 To importedCount
+        targetRow = targetStartRow + rowIndex - 1
+        taskLevel = importedLevels(rowIndex)
+        ClearTaskEstimateRow tbl, targetRow
+        For colIndex = EST_COL_PRIORITY To EST_COL_COMMENT
+            tbl.DataBodyRange.Cells(targetRow, colIndex).Value = importedValues(rowIndex, colIndex)
+        Next colIndex
+
+        currentId = NewTaskEstimateId()
+        TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_TASK_ID).Value = currentId
+        If taskLevel = 0 Then
+            TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_PARENT_TASK_ID).ClearContents
+        Else
+            If parentIds(taskLevel - 1) = "" Then Err.Raise 5, , "Parent task is missing for imported row " & CStr(rowIndex) & "."
+            TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_PARENT_TASK_ID).Value = parentIds(taskLevel - 1)
+        End If
+        TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_LEVEL).Value = taskLevel
+        tbl.DataBodyRange.Cells(targetRow, EST_COL_DESCRIPTION).IndentLevel = taskLevel
+        parentIds(taskLevel) = currentId
+        For colIndex = taskLevel + 1 To EST_MAX_DECOMPOSITION_LEVEL
+            parentIds(colIndex) = ""
+        Next colIndex
+    Next rowIndex
+
+    MarkTaskEstimateRefreshFrom targetStartRow
+    RefreshTaskEstimateTable tbl
+    AddTaskEstimateTopButtons ws
+    SyncTaskEstimateActionButtons ws
+
+    ImportTaskEstimatesXlsxFile = importedCount
+    If showSuccess Then MsgBox TaskEstimateTextImportedTasks() & CStr(importedCount), vbInformation
+
+SafeExit:
+    On Error Resume Next
+    If Not importWb Is Nothing Then importWb.Close SaveChanges:=False
+    Application.DisplayAlerts = oldDisplayAlerts
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    On Error GoTo 0
+    Exit Function
+
+Fail:
+    If showErrors Then
+        MsgBox TaskEstimateTextErrorPrefix() & "ImportTaskEstimatesXlsxFile: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+            "Path: " & xlsxPath, vbExclamation
+    Else
+        Err.Raise Err.Number, "ImportTaskEstimatesXlsxFile", Err.Description
+    End If
+    Resume SafeExit
+End Function
+
+Public Sub ValidateTaskEstimateXlsxHeaders(ByVal importWs As Worksheet)
+    Dim expectedHeaders As Variant
+    Dim index As Long
+    Dim actualValue As String
+
+    expectedHeaders = TaskEstimateVisibleHeaders()
+    For index = LBound(expectedHeaders) To UBound(expectedHeaders)
+        actualValue = Trim$(CStr(importWs.Cells(1, index + 1).Value))
+        If actualValue <> CStr(expectedHeaders(index)) Then
+            Err.Raise 5, , "Unexpected XLSX header in column " & CStr(index + 1) & ": " & actualValue
+        End If
+    Next index
+End Sub
+
+Public Function LastTaskEstimateImportXlsxRow(ByVal importWs As Worksheet) As Long
+    Dim rowIndex As Long
+    Dim colIndex As Long
+    Dim candidateRow As Long
+    Dim lastUsedRow As Long
+
+    For colIndex = EST_COL_PRIORITY To EST_COL_COMMENT
+        candidateRow = importWs.Cells(importWs.Rows.Count, colIndex).End(xlUp).Row
+        If candidateRow > lastUsedRow Then lastUsedRow = candidateRow
+    Next colIndex
+    For rowIndex = lastUsedRow To 2 Step -1
+        If TaskEstimateImportXlsxRowHasData(importWs, rowIndex) Then
+            LastTaskEstimateImportXlsxRow = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function TaskEstimateImportXlsxRowHasData(ByVal importWs As Worksheet, ByVal rowIndex As Long) As Boolean
+    Dim colIndex As Long
+
+    For colIndex = EST_COL_PRIORITY To EST_COL_COMMENT
+        If Trim$(CStr(importWs.Cells(rowIndex, colIndex).Value)) <> "" Then
+            TaskEstimateImportXlsxRowHasData = True
+            Exit Function
+        End If
+    Next colIndex
+End Function
+
+Public Function ExportQuarterPlanBacklogToXlsxFile(ByVal exportPath As String, ByVal showMessages As Boolean, ByVal allowOverwrite As Boolean) As Long
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim exportWb As Workbook
+    Dim exportWs As Worksheet
+    Dim rowIndex As Long
+    Dim colIndex As Long
+    Dim statRow As Long
+    Dim outRow As Long
+    Dim outCol As Long
+    Dim taskHeaderRow As Long
+    Dim taskFirstDataRow As Long
+    Dim normalizedPath As String
+    Dim oldEnableEvents As Boolean
+    Dim oldScreenUpdating As Boolean
+    Dim oldDisplayAlerts As Boolean
+
+    oldEnableEvents = Application.EnableEvents
+    oldScreenUpdating = Application.ScreenUpdating
+    oldDisplayAlerts = Application.DisplayAlerts
+
+    normalizedPath = EnsureXlsxExtension(Trim$(exportPath))
+    If normalizedPath = "" Then Err.Raise 5, , "Export path is empty."
+    If Dir$(normalizedPath) <> "" And Not allowOverwrite Then
+        If MsgBox("Файл уже существует. Перезаписать?" & vbCrLf & normalizedPath, vbYesNo + vbQuestion, "Экспортировать") <> vbYes Then Exit Function
+    End If
+
+    Set ws = GetQuarterPlanWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Quarter plan worksheet not found by tblPlanActive."
+    Set tbl = ws.ListObjects("tblPlanActive")
+    If tbl.DataBodyRange Is Nothing Then Err.Raise 9, , "tblPlanActive has no data body range."
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+    RefreshQuarterPlanTable tbl
+
+    Set exportWb = Application.Workbooks.Add(xlWBATWorksheet)
+    Set exportWs = exportWb.Worksheets(1)
+    exportWs.Name = QuarterPlanTextBacklogSheetName()
+    exportWs.Cells.Font.Name = DESIGN_FONT_NAME
+    exportWs.Cells.Font.Size = DESIGN_FONT_SIZE
+
+    exportWs.Range(exportWs.Cells(1, 5), exportWs.Cells(3, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1)).Value = _
+        ws.Range("J2:N4").Value
+
+    With exportWs.Range(exportWs.Cells(1, 5), exportWs.Cells(3, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1))
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Bold = True
+        .Interior.Color = RGB(217, 234, 247)
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+    End With
+
+    taskHeaderRow = 5
+    taskFirstDataRow = taskHeaderRow + 1
+
+    outCol = 1
+    For colIndex = PLAN_COL_DATA_FIRST To PLAN_COL_DATA_LAST
+        exportWs.Cells(taskHeaderRow, outCol).Value = tbl.HeaderRowRange.Cells(1, colIndex).Value
+        exportWs.Columns(outCol).ColumnWidth = tbl.Parent.Columns(tbl.Range.Column + colIndex - 1).ColumnWidth
+        outCol = outCol + 1
+    Next colIndex
+
+    outRow = taskFirstDataRow
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If QuarterPlanRowHasTask(tbl, rowIndex) Then
+            outCol = 1
+            For colIndex = PLAN_COL_DATA_FIRST To PLAN_COL_DATA_LAST
+                exportWs.Cells(outRow, outCol).Value = tbl.DataBodyRange.Cells(rowIndex, colIndex).Value
+                exportWs.Cells(outRow, outCol).NumberFormat = tbl.DataBodyRange.Cells(rowIndex, colIndex).NumberFormat
+                outCol = outCol + 1
+            Next colIndex
+            ApplyQuarterPlanExportExcludedEstimateStyle exportWs, outRow, Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, PLAN_COL_STATUS).Value))
+            outRow = outRow + 1
+        End If
+    Next rowIndex
+
+    If outRow = taskFirstDataRow Then
+        If showMessages Then
+            MsgBox "В плане нет задач для экспорта.", vbInformation
+            GoTo SafeExit
+        Else
+            Err.Raise 5, , "No active plan rows to export."
+        End If
+    End If
+
+    With exportWs.Range(exportWs.Cells(taskHeaderRow, 1), exportWs.Cells(taskHeaderRow, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1))
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Bold = True
+        .Interior.Color = RGB(217, 234, 247)
+        .HorizontalAlignment = xlCenter
+    End With
+    exportWs.Range(exportWs.Cells(taskHeaderRow, 1), exportWs.Cells(outRow - 1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1)).Borders.LineStyle = xlContinuous
+    exportWs.Range(exportWs.Cells(taskFirstDataRow, PLAN_COL_AN - PLAN_COL_DATA_FIRST + 1), exportWs.Cells(outRow - 1, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1)).NumberFormat = "0.00"
+    ApplyDateFormat exportWs.Range(exportWs.Cells(taskFirstDataRow, PLAN_COL_READY_DATE - PLAN_COL_DATA_FIRST + 1), exportWs.Cells(outRow - 1, PLAN_COL_READY_DATE - PLAN_COL_DATA_FIRST + 1))
+    exportWs.Range(exportWs.Cells(taskHeaderRow, 1), exportWs.Cells(taskHeaderRow, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1)).AutoFilter
+
+    Application.DisplayAlerts = False
+    exportWb.SaveAs Filename:=normalizedPath, FileFormat:=xlOpenXMLWorkbook
+    Application.DisplayAlerts = oldDisplayAlerts
+
+    ExportQuarterPlanBacklogToXlsxFile = outRow - taskFirstDataRow
+    If showMessages Then MsgBox "Экспортировано задач плана: " & CStr(ExportQuarterPlanBacklogToXlsxFile) & vbCrLf & normalizedPath, vbInformation
+
+SafeExit:
+    On Error Resume Next
+    If Not exportWb Is Nothing Then exportWb.Close SaveChanges:=False
+    Application.DisplayAlerts = oldDisplayAlerts
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    On Error GoTo 0
+    Exit Function
+
+Fail:
+    If showMessages Then
+        MsgBox "Ошибка ExportQuarterPlanBacklogToXlsxFile: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+            "Path: " & exportPath, vbExclamation
+    Else
+        Err.Raise Err.Number, "ExportQuarterPlanBacklogToXlsxFile", Err.Description
+    End If
+    Resume SafeExit
+End Function
+
+Public Sub ApplyQuarterPlanExportExcludedEstimateStyle(ByVal exportWs As Worksheet, ByVal exportRow As Long, ByVal statusText As String)
+    If statusText = PLAN_STATUS_ANALYSIS_READY Or statusText = PLAN_STATUS_DEFERRED Then
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_BE - PLAN_COL_DATA_FIRST + 1)
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_FE - PLAN_COL_DATA_FIRST + 1)
+    ElseIf statusText = PLAN_STATUS_BACKEND_READY Then
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_FE - PLAN_COL_DATA_FIRST + 1)
+    ElseIf statusText = PLAN_STATUS_FRONTEND_READY Then
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_BE - PLAN_COL_DATA_FIRST + 1)
+    End If
+
+    If statusText = PLAN_STATUS_ANALYSIS_READY Or statusText = PLAN_STATUS_DEV_READY Or statusText = PLAN_STATUS_BACKEND_READY Or statusText = PLAN_STATUS_FRONTEND_READY Or statusText = PLAN_STATUS_DEFERRED Then
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1)
+    End If
+
+    If statusText = PLAN_STATUS_DEFERRED Then
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_AN - PLAN_COL_DATA_FIRST + 1)
+    End If
+End Sub
+
+Public Sub MarkQuarterPlanExportExcludedEstimate(ByVal targetCell As Range)
+    With targetCell
+        .Interior.Color = 14277081
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Color = 8421504
+        .Font.Strikethrough = True
+    End With
+End Sub
+
+Public Sub ExportTaskEstimateExpressWithPrompt(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    On Error GoTo Fail
+
+    Dim selectedFile As Variant
+
+    selectedFile = PromptForXlsxExportPath(DefaultTaskEstimateExpressFileName(tbl, rowIndex), TaskEstimateTextExpressExportTitle())
+    If VarType(selectedFile) = vbBoolean Then Exit Sub
+
+    ExportTaskEstimateExpressFile tbl, rowIndex, CStr(selectedFile), True, False
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "ExportTaskEstimateExpressWithPrompt: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Row: " & CStr(rowIndex), vbExclamation
+End Sub
+
+Public Function DefaultTaskEstimateExpressFileName(ByVal tbl As ListObject, ByVal rowIndex As Long) As String
+    Dim ticket As String
+
+    ticket = Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, EST_COL_TICKET).Value))
+    If ticket = "" Then ticket = TaskEstimateTextTask()
+    DefaultTaskEstimateExpressFileName = SanitizeFileName(ticket & TaskEstimateFilePartExpressEstimate())
+End Function
+
+Public Function ExportTaskEstimateExpressFile(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal exportPath As String, ByVal showMessages As Boolean, ByVal allowOverwrite As Boolean) As Long
+    On Error GoTo Fail
+
+    Dim templateWs As Worksheet
+    Dim exportWb As Workbook
+    Dim exportWs As Worksheet
+    Dim normalizedPath As String
+    Dim lastSourceRow As Long
+    Dim sourceRow As Long
+    Dim outRow As Long
+    Dim oldDisplayAlerts As Boolean
+    Dim oldScreenUpdating As Boolean
+    Dim oldEnableEvents As Boolean
+
+    oldDisplayAlerts = Application.DisplayAlerts
+    oldScreenUpdating = Application.ScreenUpdating
+    oldEnableEvents = Application.EnableEvents
+
+    If tbl.DataBodyRange Is Nothing Then Err.Raise 9, , "tblTaskEstimates has no data body range."
+    If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Err.Raise 9, , "Source row is outside tblTaskEstimates."
+    If Not TaskEstimateRowHasTask(tbl, rowIndex) Then Err.Raise 5, , "Cannot export an empty root row."
+    If TaskEstimateRowLevel(tbl, rowIndex) <> 0 Then Err.Raise 5, , "Express estimate export is available only for root rows."
+
+    normalizedPath = EnsureXlsxExtension(Trim$(exportPath))
+    If normalizedPath = "" Then Err.Raise 5, , "Export path is empty."
+    If Dir$(normalizedPath) <> "" And Not allowOverwrite Then
+        If MsgBox(TaskEstimateTextFileExistsPrompt() & vbCrLf & normalizedPath, vbYesNo + vbQuestion, TaskEstimateTextExportDialogTitle()) <> vbYes Then Exit Function
+    End If
+
+    Application.DisplayAlerts = False
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+    RefreshTaskEstimateTable tbl
+
+    Set templateWs = ThisWorkbook.Worksheets(SHEET_EXPRESS_TEMPLATE)
+    templateWs.Copy
+    Set exportWb = ActiveWorkbook
+    Set exportWs = exportWb.Worksheets(1)
+    exportWs.Name = TaskEstimateTextExpressSheetName()
+    exportWs.Cells.Font.Name = DESIGN_FONT_NAME
+    exportWs.Cells.Font.Size = DESIGN_FONT_SIZE
+
+    exportWs.Range("E2").Value = tbl.DataBodyRange.Cells(rowIndex, EST_COL_TICKET).Value
+    exportWs.Range("E3").Value = tbl.DataBodyRange.Cells(rowIndex, EST_COL_DESCRIPTION).Value
+
+    lastSourceRow = LastTaskEstimateDescendantRow(tbl, rowIndex)
+    PrepareExpressEstimateRows exportWs, tbl, rowIndex, lastSourceRow
+
+    outRow = 17
+    For sourceRow = rowIndex To lastSourceRow
+        If TaskEstimateRowHasTask(tbl, sourceRow) Then
+            FillExpressEstimateRow exportWs, outRow, tbl, sourceRow
+            outRow = outRow + 1
+        End If
+    Next sourceRow
+
+    exportWb.SaveAs Filename:=normalizedPath, FileFormat:=xlOpenXMLWorkbook
+    ExportTaskEstimateExpressFile = outRow - 17
+    If showMessages Then MsgBox TaskEstimateTextExpressExported() & vbCrLf & normalizedPath, vbInformation
+
+SafeExit:
+    On Error Resume Next
+    If Not exportWb Is Nothing Then exportWb.Close SaveChanges:=False
+    Application.DisplayAlerts = oldDisplayAlerts
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    On Error GoTo 0
+    Exit Function
+
+Fail:
+    If showMessages Then
+        MsgBox TaskEstimateTextErrorPrefix() & "ExportTaskEstimateExpressFile: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+            "Row: " & CStr(rowIndex) & vbCrLf & _
+            "Path: " & exportPath, vbExclamation
+    Else
+        Err.Raise Err.Number, "ExportTaskEstimateExpressFile", Err.Description
+    End If
+    Resume SafeExit
+End Function
+
+Public Sub PrepareExpressEstimateRows(ByVal exportWs As Worksheet, ByVal tbl As ListObject, ByVal firstSourceRow As Long, ByVal lastSourceRow As Long)
+    Dim sourceRow As Long
+    Dim outRow As Long
+    Dim rowCount As Long
+
+    rowCount = lastSourceRow - firstSourceRow + 1
+    If rowCount < 1 Then rowCount = 1
+
+    If rowCount > 7 Then
+        For outRow = 24 To 17 + rowCount - 1
+            exportWs.Rows(outRow).Insert
+        Next outRow
+    End If
+
+    exportWs.Range("A17:L" & CStr(16 + rowCount)).ClearContents
+    If rowCount < 7 Then exportWs.Range("A" & CStr(17 + rowCount) & ":L23").ClearContents
+
+    outRow = 17
+    For sourceRow = firstSourceRow To lastSourceRow
+        If TaskEstimateRowHasTask(tbl, sourceRow) Then
+            FormatExpressEstimateRow exportWs, outRow, TaskEstimateRowLevel(tbl, sourceRow)
+            outRow = outRow + 1
+        End If
+    Next sourceRow
+End Sub
+
+Public Sub FormatExpressEstimateRow(ByVal exportWs As Worksheet, ByVal targetRow As Long, ByVal taskLevel As Long)
+    Dim templateRow As Long
+
+    If taskLevel <= 0 Then
+        templateRow = 17
+    ElseIf taskLevel = 1 Then
+        templateRow = 18
+    Else
+        templateRow = 19
+    End If
+
+    exportWs.Range("A" & CStr(templateRow) & ":L" & CStr(templateRow)).Copy
+    exportWs.Range("A" & CStr(targetRow) & ":L" & CStr(targetRow)).PasteSpecial xlPasteFormats
+    Application.CutCopyMode = False
+    exportWs.Range("A" & CStr(targetRow) & ":D" & CStr(targetRow)).UnMerge
+
+    Select Case taskLevel
+        Case 0
+            exportWs.Range("A" & CStr(targetRow) & ":D" & CStr(targetRow)).Merge
+        Case 1
+            exportWs.Range("B" & CStr(targetRow) & ":D" & CStr(targetRow)).Merge
+        Case Else
+            exportWs.Range("C" & CStr(targetRow) & ":D" & CStr(targetRow)).Merge
+    End Select
+    exportWs.Range("A" & CStr(targetRow) & ":L" & CStr(targetRow)).ClearContents
+End Sub
+
+Public Sub FillExpressEstimateRow(ByVal exportWs As Worksheet, ByVal targetRow As Long, ByVal tbl As ListObject, ByVal sourceRow As Long)
+    Dim taskLevel As Long
+
+    taskLevel = TaskEstimateRowLevel(tbl, sourceRow)
+    Select Case taskLevel
+        Case 0
+            exportWs.Range("A" & CStr(targetRow)).Value = tbl.DataBodyRange.Cells(sourceRow, EST_COL_DESCRIPTION).Value
+        Case 1
+            exportWs.Range("B" & CStr(targetRow)).Value = tbl.DataBodyRange.Cells(sourceRow, EST_COL_DESCRIPTION).Value
+        Case Else
+            exportWs.Range("C" & CStr(targetRow)).Value = tbl.DataBodyRange.Cells(sourceRow, EST_COL_DESCRIPTION).Value
+    End Select
+
+    WriteExpressEstimateValue exportWs.Range("G" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_AN).Value
+    exportWs.Range("H" & CStr(targetRow)).ClearContents
+    WriteExpressEstimateValue exportWs.Range("I" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_BE).Value
+    WriteExpressEstimateValue exportWs.Range("J" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_FE).Value
+    WriteExpressEstimateValue exportWs.Range("K" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_QA).Value
+End Sub
+
+Public Sub WriteExpressEstimateValue(ByVal targetCell As Range, ByVal sourceValue As Variant)
+    If Trim$(CStr(sourceValue)) = "" Then
+        targetCell.ClearContents
+    Else
+        targetCell.Value = sourceValue
+    End If
+End Sub
+
+Public Function ImportTaskEstimatesCsvFile(ByVal csvPath As String, ByVal importMode As Long, ByVal showSuccess As Boolean, Optional ByVal showErrors As Boolean = True) As Long
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim csvRows As Collection
+    Dim headerRow As Variant
+    Dim rowValues As Variant
+    Dim ticketIndex As Long
+    Dim subjectIndex As Long
+    Dim rowIndex As Long
+    Dim importedCount As Long
+    Dim tickets() As String
+    Dim descriptions() As String
+    Dim ticketText As String
+    Dim descriptionText As String
+    Dim maxRows As Long
+    Dim usedRows As Long
+    Dim availableRows As Long
+    Dim targetStartRow As Long
+    Dim targetRow As Long
+    Dim selectedMode As Long
+    Dim oldEnableEvents As Boolean
+    Dim oldScreenUpdating As Boolean
+
+    oldEnableEvents = Application.EnableEvents
+    oldScreenUpdating = Application.ScreenUpdating
+
+    If Trim$(csvPath) = "" Then Err.Raise 5, , "CSV path is empty."
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl.DataBodyRange Is Nothing Then Err.Raise 9, , "tblTaskEstimates has no data body range."
+
+    Set csvRows = ParseCsvText(ReadUtf8TextFile(csvPath))
+    If csvRows.Count < 1 Then Err.Raise 5, , "CSV file is empty."
+
+    headerRow = csvRows.Item(1)
+    ticketIndex = FindCsvHeaderIndex(headerRow, TaskEstimateCsvHeaderKey())
+    subjectIndex = FindCsvHeaderIndex(headerRow, TaskEstimateCsvHeaderTheme())
+    If ticketIndex = 0 Or subjectIndex = 0 Then
+        Err.Raise 5, , "CSV must contain required headers: " & TaskEstimateCsvHeaderKey() & ", " & TaskEstimateCsvHeaderTheme() & "."
+    End If
+
+    For rowIndex = 2 To csvRows.Count
+        rowValues = csvRows.Item(rowIndex)
+        ticketText = CsvField(rowValues, ticketIndex)
+        descriptionText = CsvField(rowValues, subjectIndex)
+        If Trim$(ticketText) <> "" Or Trim$(descriptionText) <> "" Then
+            importedCount = importedCount + 1
+            If importedCount = 1 Then
+                ReDim tickets(1 To 1)
+                ReDim descriptions(1 To 1)
+            Else
+                ReDim Preserve tickets(1 To importedCount)
+                ReDim Preserve descriptions(1 To importedCount)
+            End If
+            tickets(importedCount) = ticketText
+            descriptions(importedCount) = descriptionText
+        End If
+    Next rowIndex
+
+    If importedCount = 0 Then
+        If showSuccess Then MsgBox TaskEstimateTextNoCsvRows(), vbInformation
+        Exit Function
+    End If
+
+    maxRows = tbl.DataBodyRange.Rows.Count
+    usedRows = LastTaskEstimateUsedRow(tbl)
+    selectedMode = importMode
+    If selectedMode = TASK_IMPORT_MODE_PROMPT Then
+        selectedMode = PromptTaskEstimateImportMode(importedCount, maxRows, usedRows)
+        If selectedMode = TASK_IMPORT_MODE_CANCEL Then Exit Function
+    End If
+
+    If selectedMode = TASK_IMPORT_MODE_REPLACE Then
+        availableRows = maxRows
+        targetStartRow = 1
+    ElseIf selectedMode = TASK_IMPORT_MODE_APPEND Then
+        availableRows = maxRows - usedRows
+        targetStartRow = usedRows + 1
+    Else
+        Err.Raise 5, , "Unsupported import mode."
+    End If
+
+    If importedCount > availableRows Then
+        Err.Raise 5, , "CSV contains " & CStr(importedCount) & " task rows, but only " & CStr(availableRows) & " rows are available for selected import mode."
+    End If
+
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    If selectedMode = TASK_IMPORT_MODE_REPLACE Then
+        For rowIndex = 1 To maxRows
+            ClearTaskEstimateRow tbl, rowIndex
+        Next rowIndex
+        mTaskEstimateMaxActionRow = maxRows
+        MarkTaskEstimateRefreshFrom 1
+    End If
+
+    For rowIndex = 1 To importedCount
+        targetRow = targetStartRow + rowIndex - 1
+        ClearTaskEstimateRow tbl, targetRow
+        tbl.DataBodyRange.Cells(targetRow, EST_COL_DESCRIPTION).Value = descriptions(rowIndex)
+        tbl.DataBodyRange.Cells(targetRow, EST_COL_TICKET).Value = tickets(rowIndex)
+        TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_TASK_ID).Value = NewTaskEstimateId()
+        TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_PARENT_TASK_ID).ClearContents
+        TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_LEVEL).Value = 0
+    Next rowIndex
+
+    MarkTaskEstimateRefreshFrom targetStartRow
+    RefreshTaskEstimateTable tbl
+    AddTaskEstimateTopButtons ws
+    SyncTaskEstimateActionButtons ws
+
+    ImportTaskEstimatesCsvFile = importedCount
+    If showSuccess Then
+        MsgBox TaskEstimateTextImportedTasks() & CStr(importedCount), vbInformation
+    End If
+
+SafeExit:
+    Application.ScreenUpdating = oldScreenUpdating
+    Application.EnableEvents = oldEnableEvents
+    Exit Function
+
+Fail:
+    If showErrors Then
+        MsgBox TaskEstimateTextErrorPrefix() & "ImportTaskEstimatesCsvFile: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+            "Path: " & csvPath, vbExclamation
+    Else
+        Err.Raise Err.Number, "ImportTaskEstimatesCsvFile", Err.Description
+    End If
+    Resume SafeExit
+End Function
+
+Public Function PromptTaskEstimateImportMode(ByVal importedCount As Long, ByVal maxRows As Long, ByVal usedRows As Long) As Long
+    Dim answer As VbMsgBoxResult
+    Dim prompt As String
+
+    prompt = TaskEstimateTextCsvContainsTasks() & CStr(importedCount) & vbCrLf & _
+        TaskEstimateTextTotalRows() & CStr(maxRows) & vbCrLf & _
+        TaskEstimateTextFreeRows() & CStr(maxRows - usedRows) & vbCrLf & vbCrLf & _
+        TaskEstimateTextAppendChoice() & vbCrLf & _
+        TaskEstimateTextReplaceChoice() & vbCrLf & _
+        TaskEstimateTextCancelChoice()
+
+    answer = MsgBox(prompt, vbYesNoCancel + vbQuestion, TaskEstimateTextImportCsvTitle())
+    Select Case answer
+        Case vbYes
+            PromptTaskEstimateImportMode = TASK_IMPORT_MODE_APPEND
+        Case vbNo
+            PromptTaskEstimateImportMode = TASK_IMPORT_MODE_REPLACE
+        Case Else
+            PromptTaskEstimateImportMode = TASK_IMPORT_MODE_CANCEL
+    End Select
+End Function
+
+Public Function ReadUtf8TextFile(ByVal filePath As String) As String
+    Dim fileNumber As Integer
+    Dim fileLength As Long
+    Dim bytes() As Byte
+    Dim index As Long
+    Dim startIndex As Long
+    Dim b1 As Long
+    Dim b2 As Long
+    Dim b3 As Long
+    Dim b4 As Long
+    Dim codePoint As Long
+    Dim result As String
+
+    If Dir$(filePath) = "" Then Err.Raise 53, , "CSV file not found."
+
+    fileNumber = FreeFile
+    Open filePath For Binary Access Read As #fileNumber
+    fileLength = LOF(fileNumber)
+    If fileLength = 0 Then
+        Close #fileNumber
+        Exit Function
+    End If
+    ReDim bytes(1 To fileLength)
+    Get #fileNumber, , bytes
+    Close #fileNumber
+
+    startIndex = 1
+    If fileLength >= 3 Then
+        If bytes(1) = &HEF And bytes(2) = &HBB And bytes(3) = &HBF Then startIndex = 4
+    End If
+
+    index = startIndex
+    Do While index <= fileLength
+        b1 = CLng(bytes(index))
+        If b1 < &H80 Then
+            result = result & ChrWCode(b1)
+            index = index + 1
+        ElseIf (b1 And &HE0) = &HC0 And index + 1 <= fileLength Then
+            b2 = CLng(bytes(index + 1))
+            codePoint = ((b1 And &H1F) * &H40) + (b2 And &H3F)
+            result = result & ChrWCode(codePoint)
+            index = index + 2
+        ElseIf (b1 And &HF0) = &HE0 And index + 2 <= fileLength Then
+            b2 = CLng(bytes(index + 1))
+            b3 = CLng(bytes(index + 2))
+            codePoint = ((b1 And &HF) * &H1000) + ((b2 And &H3F) * &H40) + (b3 And &H3F)
+            result = result & ChrWCode(codePoint)
+            index = index + 3
+        ElseIf (b1 And &HF8) = &HF0 And index + 3 <= fileLength Then
+            b2 = CLng(bytes(index + 1))
+            b3 = CLng(bytes(index + 2))
+            b4 = CLng(bytes(index + 3))
+            codePoint = ((b1 And &H7) * &H40000) + ((b2 And &H3F) * &H1000) + ((b3 And &H3F) * &H40) + (b4 And &H3F)
+            result = result & ChrWCode(codePoint)
+            index = index + 4
+        Else
+            Err.Raise 5, , "Invalid UTF-8 sequence in CSV file."
+        End If
+    Loop
+
+    ReadUtf8TextFile = result
+End Function
+
+Public Function ChrWCode(ByVal codePoint As Long) As String
+    Dim highSurrogate As Long
+    Dim lowSurrogate As Long
+
+    If codePoint < 0 Then Err.Raise 5, , "Invalid Unicode code point."
+    If codePoint <= 65535 Then
+        If codePoint > 32767 Then
+            ChrWCode = ChrW$(codePoint - 65536)
+        Else
+            ChrWCode = ChrW$(codePoint)
+        End If
+    ElseIf codePoint <= 1114111 Then
+        codePoint = codePoint - 65536
+        highSurrogate = 55296 + (codePoint \ 1024)
+        lowSurrogate = 56320 + (codePoint Mod 1024)
+        ChrWCode = ChrWCode(highSurrogate) & ChrWCode(lowSurrogate)
+    Else
+        Err.Raise 5, , "Invalid Unicode code point."
+    End If
+End Function
+
+Public Function PromptForXlsxExportPath(ByVal initialFileName As String, ByVal promptTitle As String) As Variant
+    On Error GoTo FallbackPrompt
+
+    PromptForXlsxExportPath = Application.GetSaveAsFilename( _
+        InitialFileName:=initialFileName, _
+        FileFilter:="Excel Workbook (*.xlsx),*.xlsx", _
+        Title:=promptTitle)
+    Exit Function
+
+FallbackPrompt:
+    Err.Clear
+    On Error GoTo Fail
+    PromptForXlsxExportPath = Application.GetSaveAsFilename(InitialFileName:=initialFileName)
+    Exit Function
+
+Fail:
+    Err.Raise Err.Number, "PromptForXlsxExportPath", Err.Description
+End Function
+
+Public Function ParseCsvText(ByVal csvText As String) As Collection
+    Dim rows As Collection
+    Dim fields As Collection
+    Dim fieldText As String
+    Dim index As Long
+    Dim currentChar As String
+    Dim nextChar As String
+    Dim inQuotes As Boolean
+
+    Set rows = New Collection
+    Set fields = New Collection
+
+    For index = 1 To Len(csvText)
+        currentChar = Mid$(csvText, index, 1)
+        If inQuotes Then
+            If currentChar = """" Then
+                If index < Len(csvText) Then
+                    nextChar = Mid$(csvText, index + 1, 1)
+                    If nextChar = """" Then
+                        fieldText = fieldText & """"
+                        index = index + 1
+                    Else
+                        inQuotes = False
+                    End If
+                Else
+                    inQuotes = False
+                End If
+            Else
+                fieldText = fieldText & currentChar
+            End If
+        Else
+            If currentChar = """" Then
+                inQuotes = True
+            ElseIf currentChar = "," Then
+                fields.Add fieldText
+                fieldText = ""
+            ElseIf currentChar = vbCr Or currentChar = vbLf Then
+                fields.Add fieldText
+                AddCsvRow rows, fields
+                Set fields = New Collection
+                fieldText = ""
+                If currentChar = vbCr And index < Len(csvText) Then
+                    If Mid$(csvText, index + 1, 1) = vbLf Then index = index + 1
+                End If
+            Else
+                fieldText = fieldText & currentChar
+            End If
+        End If
+    Next index
+
+    If inQuotes Then Err.Raise 5, , "CSV contains an unclosed quoted field."
+    If fieldText <> "" Or fields.Count > 0 Then
+        fields.Add fieldText
+        AddCsvRow rows, fields
+    End If
+
+    Set ParseCsvText = rows
+End Function
+
+Public Sub AddCsvRow(ByVal rows As Collection, ByVal fields As Collection)
+    Dim fieldIndex As Long
+    Dim values() As String
+    Dim hasAnyValue As Boolean
+
+    ReDim values(1 To fields.Count)
+    For fieldIndex = 1 To fields.Count
+        values(fieldIndex) = CStr(fields.Item(fieldIndex))
+        If Trim$(values(fieldIndex)) <> "" Then hasAnyValue = True
+    Next fieldIndex
+
+    If hasAnyValue Or rows.Count = 0 Then rows.Add values
+End Sub
+
+Public Function FindCsvHeaderIndex(ByVal headerRow As Variant, ByVal requiredHeader As String) As Long
+    Dim index As Long
+    Dim normalizedRequired As String
+    Dim normalizedHeader As String
+
+    normalizedRequired = NormalizeCsvHeader(requiredHeader)
+    For index = LBound(headerRow) To UBound(headerRow)
+        normalizedHeader = NormalizeCsvHeader(CStr(headerRow(index)))
+        If normalizedHeader = normalizedRequired Then
+            FindCsvHeaderIndex = index
+            Exit Function
+        End If
+    Next index
+End Function
+
+Public Function NormalizeCsvHeader(ByVal value As String) As String
+    value = Replace(value, ChrWCode(65279), "")
+    NormalizeCsvHeader = LCase$(Trim$(value))
+End Function
+
+Public Function CsvField(ByVal rowValues As Variant, ByVal fieldIndex As Long) As String
+    If fieldIndex < LBound(rowValues) Or fieldIndex > UBound(rowValues) Then
+        CsvField = ""
+    Else
+        CsvField = Trim$(CStr(rowValues(fieldIndex)))
+    End If
+End Function

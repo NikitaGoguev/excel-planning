@@ -1,0 +1,747 @@
+Option Explicit
+Option Private Module
+
+Public Function IsTaskEstimateActionCell(ByVal ws As Worksheet, ByVal Target As Range) As Boolean
+    On Error GoTo SafeExit
+
+    Dim tbl As ListObject
+    Dim actionCol As Long
+
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl Is Nothing Then Exit Function
+    If tbl.Name <> "tblTaskEstimates" Then Exit Function
+    If Target.Row < tbl.DataBodyRange.Row Or Target.Row > tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1 Then Exit Function
+    If Target.Column <> EST_SHEET_COL_ACTION_DECOMPOSE _
+        And Target.Column <> EST_SHEET_COL_ACTION_DELETE _
+        And Target.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT Then Exit Function
+    If Trim$(CStr(Target.Value)) = "" Then Exit Function
+
+    actionCol = Target.Column
+    IsTaskEstimateActionCell = (actionCol = EST_SHEET_COL_ACTION_DECOMPOSE _
+        Or actionCol = EST_SHEET_COL_ACTION_DELETE _
+        Or actionCol = EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+
+SafeExit:
+End Function
+
+Public Function HandleTaskEstimateAction(ByVal ws As Worksheet, ByVal Target As Range) As Boolean
+    On Error GoTo Fail
+
+    Dim tbl As ListObject
+    Dim actionCol As Long
+    Dim rowIndex As Long
+
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl Is Nothing Then Err.Raise 9, , "Action cell is not inside a table."
+    If tbl.Name <> "tblTaskEstimates" Then Err.Raise 9, , "Action cell is not inside tblTaskEstimates."
+    If Target.Row < tbl.DataBodyRange.Row Or Target.Row > tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1 Then Err.Raise 9, , "Action cell is outside task estimate row range."
+    If Target.Column <> EST_SHEET_COL_ACTION_DECOMPOSE _
+        And Target.Column <> EST_SHEET_COL_ACTION_DELETE _
+        And Target.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT Then Err.Raise 5, , "Unsupported action column."
+    If Trim$(CStr(Target.Value)) = "" Then Err.Raise 5, , "Task estimate action cell is empty."
+
+    actionCol = Target.Column
+    rowIndex = Target.Row - tbl.DataBodyRange.Row + 1
+
+    Select Case actionCol
+        Case EST_SHEET_COL_ACTION_DECOMPOSE
+            DecomposeTaskEstimateRow tbl, rowIndex
+        Case EST_SHEET_COL_ACTION_DELETE
+            DeleteTaskEstimateDecomposition tbl, rowIndex, TASK_DELETE_CHOICE_PROMPT
+        Case EST_SHEET_COL_ACTION_EXPRESS_EXPORT
+            ExportTaskEstimateExpressWithPrompt tbl, rowIndex
+        Case Else
+            Err.Raise 5, , "Unsupported task estimate action."
+    End Select
+
+    HandleTaskEstimateAction = True
+    Exit Function
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "HandleTaskEstimateAction: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Sheet: " & ws.Name & vbCrLf & _
+        "Cell: " & Target.Address(False, False), vbExclamation
+End Function
+
+Public Sub RefreshTaskEstimateTable(ByVal tbl As ListObject)
+    On Error GoTo Fail
+
+    Dim rowIndex As Long
+    Dim taskLevel As Long
+    Dim actionRange As Range
+    Dim hasChildren As Boolean
+    Dim childParentIds() As String
+    Dim childParentCount As Long
+    Dim taskId As String
+    Dim parentTaskId As String
+    Dim currentMaxRow As Long
+    Dim refreshMaxRow As Long
+    Dim refreshStartRow As Long
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    currentMaxRow = LastTaskEstimateUsedRow(tbl)
+    refreshMaxRow = currentMaxRow + 1
+    If mTaskEstimateMaxActionRow + 1 > refreshMaxRow Then refreshMaxRow = mTaskEstimateMaxActionRow + 1
+    If refreshMaxRow < 1 Then refreshMaxRow = 1
+    If refreshMaxRow > tbl.DataBodyRange.Rows.Count Then refreshMaxRow = tbl.DataBodyRange.Rows.Count
+    refreshStartRow = mTaskEstimateRefreshStartRow
+    If refreshStartRow < 1 Then refreshStartRow = 1
+    If refreshStartRow > refreshMaxRow Then refreshStartRow = refreshMaxRow
+
+    ReDim childParentIds(1 To tbl.DataBodyRange.Rows.Count)
+    For rowIndex = 1 To currentMaxRow
+        If TaskEstimateRowHasTask(tbl, rowIndex) Then
+            parentTaskId = Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_PARENT_TASK_ID).Value))
+            If parentTaskId <> "" Then
+                childParentCount = childParentCount + 1
+                childParentIds(childParentCount) = parentTaskId
+            End If
+        End If
+    Next rowIndex
+
+    Set actionRange = tbl.Parent.Range(tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshStartRow - 1, EST_SHEET_COL_ACTION_DECOMPOSE), tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshMaxRow - 1, EST_SHEET_COL_ACTION_DELETE))
+    actionRange.Hyperlinks.Delete
+    tbl.Parent.Range(tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshStartRow - 1, EST_SHEET_COL_ACTION_EXPRESS_EXPORT), tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshMaxRow - 1, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)).Hyperlinks.Delete
+
+    For rowIndex = refreshStartRow To refreshMaxRow
+        TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE).ClearContents
+        TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE).ClearContents
+        TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_EXPRESS_EXPORT).ClearContents
+
+        If TaskEstimateRowHasTask(tbl, rowIndex) Then
+            taskId = EnsureTaskEstimateRowId(tbl, rowIndex)
+            taskLevel = TaskEstimateRowLevel(tbl, rowIndex)
+            TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_LEVEL).Value = taskLevel
+            tbl.DataBodyRange.Cells(rowIndex, EST_COL_DESCRIPTION).IndentLevel = taskLevel
+            hasChildren = TaskEstimateIdInList(taskId, childParentIds, childParentCount)
+
+            If taskLevel < EST_MAX_DECOMPOSITION_LEVEL Then
+                TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE).Value = TaskEstimateTextDecompose()
+            End If
+            If hasChildren Or taskLevel > 0 Then
+                TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE).Value = TaskEstimateTextDeleteDecomposition()
+            End If
+            If taskLevel = 0 Then
+                TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_EXPRESS_EXPORT).Value = TaskEstimateTextExpressExport()
+            End If
+            If hasChildren Then
+                WriteTaskEstimateParentFormulas tbl, rowIndex
+                ApplyTaskEstimateCalculatedStyle tbl, rowIndex
+            Else
+                ApplyTaskEstimateInputStyle tbl, rowIndex
+            End If
+        Else
+            ClearTaskEstimateRow tbl, rowIndex
+        End If
+
+        AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE)
+        AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE)
+        AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+    Next rowIndex
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "RefreshTaskEstimateTable: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub WriteTaskEstimateParentFormulas(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    Dim previousAutoFill As Boolean
+    Dim col As Long
+
+    On Error GoTo Fail
+
+    previousAutoFill = Application.AutoCorrect.AutoFillFormulasInLists
+    Application.AutoCorrect.AutoFillFormulasInLists = False
+
+    For col = EST_COL_AN To EST_COL_QA
+        WriteTaskEstimateParentFormula tbl, rowIndex, col
+    Next col
+
+SafeExit:
+    Application.AutoCorrect.AutoFillFormulasInLists = previousAutoFill
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "WriteTaskEstimateParentFormulas: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Row: " & CStr(rowIndex), vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Sub WriteTaskEstimateParentFormula(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal estimateCol As Long)
+    Dim targetCell As Range
+    Dim parentIdCell As Range
+    Dim parentIdRange As Range
+    Dim sumRange As Range
+    Dim sumExpression As String
+
+    Set targetCell = tbl.DataBodyRange.Cells(rowIndex, estimateCol)
+    Set parentIdCell = TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_TASK_ID)
+    Set parentIdRange = tbl.Parent.Range( _
+        tbl.Parent.Cells(tbl.DataBodyRange.Row, EST_SHEET_COL_PARENT_TASK_ID), _
+        tbl.Parent.Cells(tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1, EST_SHEET_COL_PARENT_TASK_ID))
+    Set sumRange = tbl.Parent.Range( _
+        tbl.DataBodyRange.Cells(1, estimateCol), _
+        tbl.DataBodyRange.Cells(tbl.DataBodyRange.Rows.Count, estimateCol))
+
+    sumExpression = "SUMIF(" & parentIdRange.Address(True, True) & "," & parentIdCell.Address(True, False) & "," & sumRange.Address(True, True) & ")"
+    targetCell.Formula = "=IF(" & sumExpression & "=0,""""," & sumExpression & ")"
+End Sub
+
+Public Sub ApplyTaskEstimateCalculatedStyle(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    Dim estimateRange As Range
+
+    Set estimateRange = tbl.Parent.Range( _
+        tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN), _
+        tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA))
+    With estimateRange
+        .Interior.Color = RGB(217, 217, 217)
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Color = RGB(89, 89, 89)
+        .Font.Bold = False
+        .Font.Italic = False
+        .HorizontalAlignment = xlRight
+        .VerticalAlignment = xlCenter
+        .NumberFormat = "0.00"
+    End With
+End Sub
+
+Public Sub ApplyTaskEstimateInputStyle(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    Dim estimateRange As Range
+
+    Set estimateRange = tbl.Parent.Range( _
+        tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN), _
+        tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA))
+    With estimateRange
+        .Interior.Color = RGB(255, 242, 204)
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Color = RGB(31, 31, 31)
+        .Font.Bold = False
+        .Font.Italic = False
+        .HorizontalAlignment = xlRight
+        .VerticalAlignment = xlCenter
+        .NumberFormat = "0.00"
+    End With
+End Sub
+
+Public Sub AddTaskEstimateActionLink(ByVal cell As Range)
+    On Error GoTo SafeExit
+
+    If Trim$(CStr(cell.Value)) = "" Then Exit Sub
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(255, 255, 255)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
+
+SafeExit:
+End Sub
+
+Public Sub DecomposeTaskEstimateRow(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    Dim taskLevel As Long
+    Dim insertRowIndex As Long
+    Dim col As Long
+    Dim parentTaskId As String
+    Dim hadChildren As Boolean
+
+    If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Err.Raise 9, , "Task row index is outside table."
+    If Not TaskEstimateRowHasTask(tbl, rowIndex) Then Err.Raise 5, , "Cannot decompose an empty row."
+
+    taskLevel = TaskEstimateRowLevel(tbl, rowIndex)
+    If taskLevel >= EST_MAX_DECOMPOSITION_LEVEL Then
+        Err.Raise 5, , "Cannot decompose below level " & CStr(EST_MAX_DECOMPOSITION_LEVEL) & "."
+    End If
+
+    If TaskEstimateRowHasTask(tbl, tbl.DataBodyRange.Rows.Count) Then
+        Err.Raise 5, , "Task estimate table has no free rows for decomposition."
+    End If
+
+    parentTaskId = EnsureTaskEstimateRowId(tbl, rowIndex)
+    hadChildren = TaskEstimateRowHasChildren(tbl, rowIndex)
+    insertRowIndex = LastTaskEstimateDescendantRow(tbl, rowIndex) + 1
+    If insertRowIndex > tbl.DataBodyRange.Rows.Count Then
+        Err.Raise 5, , "Task estimate table has no free row below the selected task."
+    End If
+
+    ShiftTaskEstimateRowsDown tbl, insertRowIndex
+
+    For col = EST_COL_PRIORITY To EST_COL_NOTE
+        tbl.DataBodyRange.Cells(insertRowIndex, col).Value = tbl.DataBodyRange.Cells(rowIndex, col).Value
+    Next col
+    For col = EST_COL_AN To EST_COL_QA
+        If hadChildren Then
+            tbl.DataBodyRange.Cells(insertRowIndex, col).ClearContents
+        Else
+            tbl.DataBodyRange.Cells(insertRowIndex, col).Value = tbl.DataBodyRange.Cells(rowIndex, col).Value
+            tbl.DataBodyRange.Cells(rowIndex, col).ClearContents
+        End If
+    Next col
+    tbl.DataBodyRange.Cells(insertRowIndex, EST_COL_COMMENT).Value = tbl.DataBodyRange.Cells(rowIndex, EST_COL_COMMENT).Value
+    TaskEstimateSheetCell(tbl, insertRowIndex, EST_SHEET_COL_TASK_ID).Value = NewTaskEstimateId()
+    TaskEstimateSheetCell(tbl, insertRowIndex, EST_SHEET_COL_PARENT_TASK_ID).Value = parentTaskId
+    TaskEstimateSheetCell(tbl, insertRowIndex, EST_SHEET_COL_LEVEL).Value = taskLevel + 1
+
+    WriteTaskEstimateParentFormulas tbl, rowIndex
+    ApplyTaskEstimateCalculatedStyle tbl, rowIndex
+    ApplyTaskEstimateInputStyle tbl, insertRowIndex
+    MarkTaskEstimateRefreshFrom rowIndex
+End Sub
+
+Public Sub DeleteTaskEstimateDecomposition(ByVal tbl As ListObject, ByVal rowIndex As Long, Optional ByVal deleteChoice As Long = TASK_DELETE_CHOICE_PROMPT)
+    Dim lastDescendantRow As Long
+    Dim deleteCount As Long
+    Dim deleteLastRow As Long
+    Dim anSum As Double
+    Dim beSum As Double
+    Dim feSum As Double
+    Dim qaSum As Double
+    Dim transferRowIndex As Long
+    Dim writableRowIndex As Long
+    Dim writeToParentAfterDelete As Boolean
+
+    If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Err.Raise 9, , "Task row index is outside table."
+    If Not TaskEstimateRowHasTask(tbl, rowIndex) Then Err.Raise 5, , "Cannot delete decomposition for an empty row."
+    If TaskEstimateRowLevel(tbl, rowIndex) = 0 And Not TaskEstimateRowHasChildren(tbl, rowIndex) Then Err.Raise 5, , "Root task without decomposition cannot be deleted with the decomposition delete action."
+    MarkTaskEstimateRefreshFrom TaskEstimateAncestorRefreshRow(tbl, rowIndex)
+
+    lastDescendantRow = LastTaskEstimateDescendantRow(tbl, rowIndex)
+    deleteLastRow = lastDescendantRow
+    deleteCount = deleteLastRow - rowIndex + 1
+
+    If deleteChoice = TASK_DELETE_CHOICE_PROMPT Then
+        deleteChoice = PromptTaskEstimateDeleteChoice(tbl, rowIndex)
+    End If
+    If deleteChoice = TASK_DELETE_CHOICE_PROMPT Then Exit Sub
+    If deleteChoice < TASK_DELETE_CHOICE_DROP Or deleteChoice > TASK_DELETE_CHOICE_DOWN Then Err.Raise 5, , "Unsupported delete choice: " & CStr(deleteChoice)
+
+    SumTaskEstimateDeleteEstimates tbl, rowIndex, anSum, beSum, feSum, qaSum
+
+    If deleteChoice <> TASK_DELETE_CHOICE_DROP Then
+        transferRowIndex = FindTaskEstimateSiblingRow(tbl, rowIndex, deleteChoice)
+        If transferRowIndex = 0 Then
+            If TaskEstimateRowLevel(tbl, rowIndex) = 0 Then
+                Err.Raise 5, , "Root task has no sibling in selected transfer direction."
+            End If
+            transferRowIndex = FindTaskEstimateRowById(tbl, Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_PARENT_TASK_ID).Value)))
+            If transferRowIndex = 0 Then Err.Raise 9, , "Parent task not found for fallback transfer."
+        End If
+        If transferRowIndex = 0 Then Err.Raise 5, , "No valid transfer target for selected delete action."
+
+        writableRowIndex = ResolveTaskEstimateWritableTransferRow(tbl, transferRowIndex, deleteChoice, rowIndex, deleteLastRow)
+        If writableRowIndex > 0 Then
+            AddTaskEstimateSumsToRow tbl, writableRowIndex, anSum, beSum, feSum, qaSum
+        Else
+            writeToParentAfterDelete = True
+        End If
+    End If
+
+    DeleteTaskEstimateRows tbl, rowIndex, deleteCount
+
+    If writeToParentAfterDelete Then
+        AddTaskEstimateSumsToRow tbl, AdjustTaskEstimateRowAfterDelete(transferRowIndex, rowIndex, deleteCount), anSum, beSum, feSum, qaSum
+    End If
+
+End Sub
+
+Public Function PromptTaskEstimateDeleteChoice(ByVal tbl As ListObject, ByVal rowIndex As Long) As Long
+    Dim rawValue As Variant
+    Dim promptText As String
+
+    promptText = "Удалить декомпозированную задачу?" & vbCrLf & vbCrLf & _
+        "1 - удалить вместе с оценками" & vbCrLf & _
+        "2 - перенести оценки вверх и удалить" & vbCrLf & _
+        "3 - перенести оценки вниз и удалить" & vbCrLf & vbCrLf & _
+        "Строка: " & CStr(tbl.DataBodyRange.Row + rowIndex - 1)
+
+    Do
+        rawValue = Application.InputBox(promptText, "Удаление декомпозиции", Type:=1)
+        If VarType(rawValue) = vbBoolean Then
+            If rawValue = False Then
+                PromptTaskEstimateDeleteChoice = TASK_DELETE_CHOICE_PROMPT
+                Exit Function
+            End If
+        End If
+        If IsNumeric(rawValue) Then
+            If CLng(rawValue) >= TASK_DELETE_CHOICE_DROP And CLng(rawValue) <= TASK_DELETE_CHOICE_DOWN Then
+                PromptTaskEstimateDeleteChoice = CLng(rawValue)
+                Exit Function
+            End If
+        End If
+        MsgBox "Введите 1, 2 или 3.", vbExclamation
+    Loop
+End Function
+
+Public Sub SumTaskEstimateDeleteEstimates(ByVal tbl As ListObject, ByVal rowIndex As Long, ByRef anSum As Double, ByRef beSum As Double, ByRef feSum As Double, ByRef qaSum As Double)
+    If TaskEstimateRowHasChildren(tbl, rowIndex) Then
+        SumTaskEstimateLeafEstimates tbl, rowIndex, anSum, beSum, feSum, qaSum
+    Else
+        anSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN).Value)
+        beSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE).Value)
+        feSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE).Value)
+        qaSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA).Value)
+    End If
+End Sub
+
+Public Function ResolveTaskEstimateTransferRow(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal deleteChoice As Long) As Long
+    Dim siblingRow As Long
+    Dim parentId As String
+
+    siblingRow = FindTaskEstimateSiblingRow(tbl, rowIndex, deleteChoice)
+    If siblingRow > 0 Then
+        ResolveTaskEstimateTransferRow = siblingRow
+        Exit Function
+    End If
+
+    If TaskEstimateRowLevel(tbl, rowIndex) = 0 Then
+        Err.Raise 5, , "Root task has no sibling in selected transfer direction."
+    End If
+
+    parentId = Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_PARENT_TASK_ID).Value))
+    ResolveTaskEstimateTransferRow = FindTaskEstimateRowById(tbl, parentId)
+    If ResolveTaskEstimateTransferRow = 0 Then Err.Raise 9, , "Parent task not found for fallback transfer."
+End Function
+
+Public Function FindTaskEstimateSiblingRow(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal deleteChoice As Long) As Long
+    Dim sourceLevel As Long
+    Dim sourceParentId As String
+    Dim scanRow As Long
+    Dim scanLevel As Long
+
+    sourceLevel = TaskEstimateRowLevel(tbl, rowIndex)
+    sourceParentId = Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_PARENT_TASK_ID).Value))
+
+    If deleteChoice = TASK_DELETE_CHOICE_UP Then
+        For scanRow = rowIndex - 1 To 1 Step -1
+            If TaskEstimateRowHasTask(tbl, scanRow) Then
+                scanLevel = TaskEstimateRowLevel(tbl, scanRow)
+                If scanLevel < sourceLevel Then Exit For
+                If scanLevel = sourceLevel And Trim$(CStr(TaskEstimateSheetCell(tbl, scanRow, EST_SHEET_COL_PARENT_TASK_ID).Value)) = sourceParentId Then
+                    FindTaskEstimateSiblingRow = scanRow
+                    Exit Function
+                End If
+            End If
+        Next scanRow
+    ElseIf deleteChoice = TASK_DELETE_CHOICE_DOWN Then
+        scanRow = LastTaskEstimateDescendantRow(tbl, rowIndex) + 1
+        Do While scanRow <= tbl.DataBodyRange.Rows.Count
+            If Not TaskEstimateRowHasTask(tbl, scanRow) Then Exit Do
+            scanLevel = TaskEstimateRowLevel(tbl, scanRow)
+            If scanLevel < sourceLevel Then Exit Do
+            If scanLevel = sourceLevel Then
+                If Trim$(CStr(TaskEstimateSheetCell(tbl, scanRow, EST_SHEET_COL_PARENT_TASK_ID).Value)) = sourceParentId Then
+                    FindTaskEstimateSiblingRow = scanRow
+                End If
+                Exit Function
+            End If
+            scanRow = LastTaskEstimateDescendantRow(tbl, scanRow) + 1
+        Loop
+    End If
+End Function
+
+Public Function ResolveTaskEstimateWritableTransferRow(ByVal tbl As ListObject, ByVal transferRowIndex As Long, ByVal deleteChoice As Long, ByVal deleteFirstRow As Long, ByVal deleteLastRow As Long) As Long
+    Dim candidateRow As Long
+
+    If transferRowIndex <= 0 Then Exit Function
+    If Not TaskEstimateRowHasChildren(tbl, transferRowIndex) Then
+        ResolveTaskEstimateWritableTransferRow = transferRowIndex
+        Exit Function
+    End If
+
+    candidateRow = FindTaskEstimateLeafDescendant(tbl, transferRowIndex, deleteChoice, deleteFirstRow, deleteLastRow)
+    If candidateRow > 0 Then
+        ResolveTaskEstimateWritableTransferRow = candidateRow
+    End If
+End Function
+
+Public Function FindTaskEstimateLeafDescendant(ByVal tbl As ListObject, ByVal parentRowIndex As Long, ByVal deleteChoice As Long, ByVal deleteFirstRow As Long, ByVal deleteLastRow As Long) As Long
+    Dim firstRow As Long
+    Dim lastRow As Long
+    Dim scanRow As Long
+
+    firstRow = parentRowIndex + 1
+    lastRow = LastTaskEstimateDescendantRow(tbl, parentRowIndex)
+    If lastRow < firstRow Then Exit Function
+
+    If deleteChoice = TASK_DELETE_CHOICE_UP Then
+        For scanRow = lastRow To firstRow Step -1
+            If scanRow < deleteFirstRow Or scanRow > deleteLastRow Then
+                If TaskEstimateRowHasTask(tbl, scanRow) And Not TaskEstimateRowHasChildren(tbl, scanRow) Then
+                    FindTaskEstimateLeafDescendant = scanRow
+                    Exit Function
+                End If
+            End If
+        Next scanRow
+    Else
+        For scanRow = firstRow To lastRow
+            If scanRow < deleteFirstRow Or scanRow > deleteLastRow Then
+                If TaskEstimateRowHasTask(tbl, scanRow) And Not TaskEstimateRowHasChildren(tbl, scanRow) Then
+                    FindTaskEstimateLeafDescendant = scanRow
+                    Exit Function
+                End If
+            End If
+        Next scanRow
+    End If
+End Function
+
+Public Sub AddTaskEstimateSumsToRow(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal anSum As Double, ByVal beSum As Double, ByVal feSum As Double, ByVal qaSum As Double)
+    If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Err.Raise 9, , "Transfer target row is outside task estimate table."
+    If TaskEstimateRowHasChildren(tbl, rowIndex) Then Err.Raise 5, , "Cannot write transferred estimates directly into a parent formula row."
+
+    WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN).Value) + anSum
+    WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE).Value) + beSum
+    WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE).Value) + feSum
+    WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA).Value) + qaSum
+End Sub
+
+Public Function AdjustTaskEstimateRowAfterDelete(ByVal rowIndex As Long, ByVal deleteFirstRow As Long, ByVal deleteCount As Long) As Long
+    If rowIndex > deleteFirstRow Then
+        AdjustTaskEstimateRowAfterDelete = rowIndex - deleteCount
+    Else
+        AdjustTaskEstimateRowAfterDelete = rowIndex
+    End If
+End Function
+
+Public Sub ShiftTaskEstimateRowsDown(ByVal tbl As ListObject, ByVal insertRowIndex As Long)
+    Dim col As Long
+    Dim lastRowIndex As Long
+    Dim moveCount As Long
+    Dim visibleValues As Variant
+    Dim hiddenValues As Variant
+    Dim ws As Worksheet
+
+    Set ws = tbl.Parent
+    lastRowIndex = tbl.DataBodyRange.Rows.Count
+    moveCount = lastRowIndex - insertRowIndex
+
+    If moveCount > 0 Then
+        visibleValues = tbl.Parent.Range( _
+            tbl.DataBodyRange.Cells(insertRowIndex, EST_COL_PRIORITY), _
+            tbl.DataBodyRange.Cells(lastRowIndex - 1, EST_COL_LAST)).Value
+        tbl.Parent.Range( _
+            tbl.DataBodyRange.Cells(insertRowIndex + 1, EST_COL_PRIORITY), _
+            tbl.DataBodyRange.Cells(lastRowIndex, EST_COL_LAST)).Value = visibleValues
+
+        hiddenValues = ws.Range( _
+            ws.Cells(tbl.DataBodyRange.Row + insertRowIndex - 1, EST_SHEET_COL_TASK_ID), _
+            ws.Cells(tbl.DataBodyRange.Row + lastRowIndex - 2, EST_SHEET_COL_LEVEL)).Value
+        ws.Range( _
+            ws.Cells(tbl.DataBodyRange.Row + insertRowIndex, EST_SHEET_COL_TASK_ID), _
+            ws.Cells(tbl.DataBodyRange.Row + lastRowIndex - 1, EST_SHEET_COL_LEVEL)).Value = hiddenValues
+    End If
+
+    For col = EST_COL_PRIORITY To EST_COL_LAST
+        tbl.DataBodyRange.Cells(insertRowIndex, col).ClearContents
+    Next col
+    TaskEstimateSheetCell(tbl, insertRowIndex, EST_SHEET_COL_TASK_ID).ClearContents
+    TaskEstimateSheetCell(tbl, insertRowIndex, EST_SHEET_COL_PARENT_TASK_ID).ClearContents
+    TaskEstimateSheetCell(tbl, insertRowIndex, EST_SHEET_COL_LEVEL).ClearContents
+End Sub
+
+Public Sub DeleteTaskEstimateRows(ByVal tbl As ListObject, ByVal firstRowIndex As Long, ByVal deleteCount As Long)
+    Dim rowIndex As Long
+    Dim lastRowIndex As Long
+    Dim moveCount As Long
+    Dim visibleValues As Variant
+    Dim hiddenValues As Variant
+    Dim ws As Worksheet
+
+    Set ws = tbl.Parent
+    lastRowIndex = tbl.DataBodyRange.Rows.Count
+    moveCount = lastRowIndex - firstRowIndex - deleteCount + 1
+
+    If moveCount > 0 Then
+        visibleValues = tbl.Parent.Range( _
+            tbl.DataBodyRange.Cells(firstRowIndex + deleteCount, EST_COL_PRIORITY), _
+            tbl.DataBodyRange.Cells(lastRowIndex, EST_COL_LAST)).Value
+        tbl.Parent.Range( _
+            tbl.DataBodyRange.Cells(firstRowIndex, EST_COL_PRIORITY), _
+            tbl.DataBodyRange.Cells(lastRowIndex - deleteCount, EST_COL_LAST)).Value = visibleValues
+
+        hiddenValues = ws.Range( _
+            ws.Cells(tbl.DataBodyRange.Row + firstRowIndex + deleteCount - 1, EST_SHEET_COL_TASK_ID), _
+            ws.Cells(tbl.DataBodyRange.Row + lastRowIndex - 1, EST_SHEET_COL_LEVEL)).Value
+        ws.Range( _
+            ws.Cells(tbl.DataBodyRange.Row + firstRowIndex - 1, EST_SHEET_COL_TASK_ID), _
+            ws.Cells(tbl.DataBodyRange.Row + lastRowIndex - deleteCount - 1, EST_SHEET_COL_LEVEL)).Value = hiddenValues
+    End If
+
+    For rowIndex = tbl.DataBodyRange.Rows.Count - deleteCount + 1 To tbl.DataBodyRange.Rows.Count
+        ClearTaskEstimateRow tbl, rowIndex
+    Next rowIndex
+End Sub
+
+Public Sub ClearTaskEstimateRow(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    Dim col As Long
+
+    TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE).ClearContents
+    TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE).ClearContents
+    For col = EST_COL_PRIORITY To EST_COL_LAST
+        tbl.DataBodyRange.Cells(rowIndex, col).ClearContents
+    Next col
+    TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_TASK_ID).ClearContents
+    TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_PARENT_TASK_ID).ClearContents
+    TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_LEVEL).ClearContents
+    tbl.DataBodyRange.Cells(rowIndex, EST_COL_DESCRIPTION).IndentLevel = 0
+End Sub
+
+Public Function TaskEstimateRowHasTask(ByVal tbl As ListObject, ByVal rowIndex As Long) As Boolean
+    Dim col As Variant
+    Dim valueText As String
+
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+    If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Exit Function
+
+    For Each col In Array(EST_COL_PRIORITY, EST_COL_DIRECTION, EST_COL_DESCRIPTION, EST_COL_TICKET, EST_COL_NOTE, EST_COL_AN, EST_COL_BE, EST_COL_FE, EST_COL_QA)
+        valueText = Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, CLng(col)).Value))
+        If valueText <> "" Then
+            TaskEstimateRowHasTask = True
+            Exit Function
+        End If
+    Next col
+End Function
+
+Public Function TaskEstimateRowLevel(ByVal tbl As ListObject, ByVal rowIndex As Long) As Long
+    Dim rawValue As Variant
+    Dim result As Long
+
+    rawValue = TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_LEVEL).Value
+    If IsNumeric(rawValue) Then result = CLng(rawValue)
+    If result < 0 Then result = 0
+    If result > EST_MAX_DECOMPOSITION_LEVEL Then result = EST_MAX_DECOMPOSITION_LEVEL
+    TaskEstimateRowLevel = result
+End Function
+
+Public Function EnsureTaskEstimateRowId(ByVal tbl As ListObject, ByVal rowIndex As Long) As String
+    Dim taskId As String
+
+    taskId = Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_TASK_ID).Value))
+    If taskId = "" Then
+        taskId = NewTaskEstimateId()
+        TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_TASK_ID).Value = taskId
+    End If
+    EnsureTaskEstimateRowId = taskId
+End Function
+
+Public Function NewTaskEstimateId() As String
+    Randomize
+    NewTaskEstimateId = "t" & Format$(Now, "yyyymmddhhmmss") & "_" & CStr(Int(Rnd() * 1000000#))
+End Function
+
+Public Function FindTaskEstimateRowById(ByVal tbl As ListObject, ByVal taskId As String) As Long
+    Dim rowIndex As Long
+    Dim normalizedTaskId As String
+
+    normalizedTaskId = Trim$(taskId)
+    If normalizedTaskId = "" Then Exit Function
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        If Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_TASK_ID).Value)) = normalizedTaskId Then
+            FindTaskEstimateRowById = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Function TaskEstimateAncestorRefreshRow(ByVal tbl As ListObject, ByVal rowIndex As Long) As Long
+    Dim result As Long
+    Dim parentId As String
+    Dim parentRow As Long
+
+    result = rowIndex
+    parentId = Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_PARENT_TASK_ID).Value))
+    Do While parentId <> ""
+        parentRow = FindTaskEstimateRowById(tbl, parentId)
+        If parentRow = 0 Then Exit Do
+        If parentRow < result Then result = parentRow
+        parentId = Trim$(CStr(TaskEstimateSheetCell(tbl, parentRow, EST_SHEET_COL_PARENT_TASK_ID).Value))
+    Loop
+    TaskEstimateAncestorRefreshRow = result
+End Function
+
+Public Function TaskEstimateRowHasChildren(ByVal tbl As ListObject, ByVal rowIndex As Long) As Boolean
+    Dim taskId As String
+    Dim scanRow As Long
+
+    taskId = Trim$(CStr(TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_TASK_ID).Value))
+    If taskId = "" Then Exit Function
+
+    For scanRow = 1 To tbl.DataBodyRange.Rows.Count
+        If scanRow <> rowIndex Then
+            If Trim$(CStr(TaskEstimateSheetCell(tbl, scanRow, EST_SHEET_COL_PARENT_TASK_ID).Value)) = taskId _
+                And TaskEstimateRowHasTask(tbl, scanRow) Then
+                TaskEstimateRowHasChildren = True
+                Exit Function
+            End If
+        End If
+    Next scanRow
+End Function
+
+Public Function LastTaskEstimateDescendantRow(ByVal tbl As ListObject, ByVal rowIndex As Long) As Long
+    Dim baseLevel As Long
+    Dim scanRow As Long
+    Dim scanLevel As Long
+
+    baseLevel = TaskEstimateRowLevel(tbl, rowIndex)
+    LastTaskEstimateDescendantRow = rowIndex
+
+    For scanRow = rowIndex + 1 To tbl.DataBodyRange.Rows.Count
+        If Not TaskEstimateRowHasTask(tbl, scanRow) Then Exit For
+        scanLevel = TaskEstimateRowLevel(tbl, scanRow)
+        If scanLevel <= baseLevel Then Exit For
+        LastTaskEstimateDescendantRow = scanRow
+    Next scanRow
+End Function
+
+Public Sub SumTaskEstimateLeafEstimates(ByVal tbl As ListObject, ByVal rootRowIndex As Long, ByRef anSum As Double, ByRef beSum As Double, ByRef feSum As Double, ByRef qaSum As Double)
+    Dim lastDescendantRow As Long
+    Dim rowIndex As Long
+
+    lastDescendantRow = LastTaskEstimateDescendantRow(tbl, rootRowIndex)
+    For rowIndex = rootRowIndex + 1 To lastDescendantRow
+        If TaskEstimateRowHasTask(tbl, rowIndex) And Not TaskEstimateRowHasChildren(tbl, rowIndex) Then
+            anSum = anSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN).Value)
+            beSum = beSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE).Value)
+            feSum = feSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE).Value)
+            qaSum = qaSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA).Value)
+        End If
+    Next rowIndex
+End Sub
+
+Public Function EffectiveTaskEstimateValue(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal estimateCol As Long) As Double
+    Dim anSum As Double
+    Dim beSum As Double
+    Dim feSum As Double
+    Dim qaSum As Double
+
+    If TaskEstimateRowHasChildren(tbl, rowIndex) Then
+        SumTaskEstimateLeafEstimates tbl, rowIndex, anSum, beSum, feSum, qaSum
+        Select Case estimateCol
+            Case EST_COL_AN
+                EffectiveTaskEstimateValue = anSum
+            Case EST_COL_BE
+                EffectiveTaskEstimateValue = beSum
+            Case EST_COL_FE
+                EffectiveTaskEstimateValue = feSum
+            Case EST_COL_QA
+                EffectiveTaskEstimateValue = qaSum
+        End Select
+    Else
+        EffectiveTaskEstimateValue = NzDouble(tbl.DataBodyRange.Cells(rowIndex, estimateCol).Value)
+    End If
+End Function
+
+Public Sub WriteEstimateNumber(ByVal targetCell As Range, ByVal value As Double)
+    If value = 0 Then
+        targetCell.ClearContents
+    Else
+        targetCell.Value = value
+    End If
+End Sub
+
+Public Function TaskEstimateSheetCell(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal sheetCol As Long) As Range
+    Set TaskEstimateSheetCell = tbl.Parent.Cells(tbl.DataBodyRange.Row + rowIndex - 1, sheetCol)
+End Function

@@ -1,0 +1,869 @@
+Option Explicit
+Option Private Module
+
+Public Sub RebuildQuarterPlanActionUi()
+    Dim wsPlan As Worksheet
+
+    mQuarterPlanClosing = False
+    mQuarterPlanActionRunning = False
+    mQuarterPlanUiBusy = True
+    Set wsPlan = GetQuarterPlanWorksheet()
+    If Not wsPlan Is Nothing Then SetupQuarterPlanActionUi wsPlan
+    mQuarterPlanUiBusy = False
+End Sub
+
+Public Sub RefreshQuarterPlanActionGrid()
+    Dim ws As Worksheet
+
+    On Error GoTo SafeExit
+    mQuarterPlanClosing = False
+    mQuarterPlanUiBusy = True
+    Set ws = GetQuarterPlanWorksheet()
+    If ws Is Nothing Then GoTo SafeExit
+
+    ApplyQuarterPlanDateFormats ws
+    RefreshQuarterPlanTable ws.ListObjects("tblPlanActive")
+    RefreshQuarterPlanTable ws.ListObjects("tblPlanGrey")
+    RefreshQuarterPlanTable ws.ListObjects("tblPlanBacklog")
+    AddQuarterPlanReloadBacklogLink ws
+    AddQuarterPlanRecalculateLink ws
+    AddQuarterPlanExportBacklogLink ws
+    AddQuarterPlanBacklogAddAllLink ws
+    RemoveQuarterPlanActionButtons ws
+    AddQuarterPlanShapeButtons ws
+
+SafeExit:
+    mQuarterPlanUiBusy = False
+End Sub
+
+Public Sub SetupQuarterPlanActionUi(ByVal ws As Worksheet)
+    On Error GoTo SafeExit
+    mQuarterPlanClosing = False
+
+    ApplyQuarterPlanDateFormats ws
+    RefreshQuarterPlanTable ws.ListObjects("tblPlanActive")
+    RefreshQuarterPlanTable ws.ListObjects("tblPlanGrey")
+    RefreshQuarterPlanTable ws.ListObjects("tblPlanBacklog")
+    AddQuarterPlanReloadBacklogLink ws
+    AddQuarterPlanRecalculateLink ws
+    AddQuarterPlanExportBacklogLink ws
+    AddQuarterPlanBacklogAddAllLink ws
+    RemoveQuarterPlanActionButtons ws
+    AddQuarterPlanShapeButtons ws
+
+SafeExit:
+End Sub
+
+Public Sub ApplyDateFormat(ByVal targetRange As Range)
+    targetRange.NumberFormatLocal = DateFormatLocalText()
+End Sub
+
+Public Function DateFormatLocalText() As String
+    DateFormatLocalText = ChrW$(&H414) & ChrW$(&H414) & "-" & _
+                          ChrW$(&H41C) & ChrW$(&H41C) & "-" & _
+                          ChrW$(&H413) & ChrW$(&H413) & ChrW$(&H413) & ChrW$(&H413)
+End Function
+
+Public Sub ApplyQuarterPlanDateFormats(ByVal ws As Worksheet)
+    ws.Columns(PLAN_TECH_FIRST_COL_LETTER & ":" & PLAN_TECH_LAST_COL_LETTER).Hidden = False
+    ApplyDateFormat ws.Range("P:P")
+    ApplyDateFormat ws.Range("X:AE")
+End Sub
+
+Public Sub RebuildTaskEstimateActionUi()
+    Dim wsEstimate As Worksheet
+
+    mQuarterPlanClosing = False
+    mQuarterPlanActionRunning = False
+    mQuarterPlanUiBusy = True
+    Set wsEstimate = GetTaskEstimatesWorksheet()
+    If Not wsEstimate Is Nothing Then
+        RemoveTaskEstimateActionButtons wsEstimate
+        mTaskEstimateMaxActionRow = 0
+        SetupTaskEstimateActionUi wsEstimate
+    End If
+    mQuarterPlanUiBusy = False
+End Sub
+
+Public Sub RefreshTaskEstimateActionGrid()
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim restoredTemplate As Boolean
+
+    On Error GoTo Fail
+    mQuarterPlanClosing = False
+    mQuarterPlanUiBusy = True
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found by tblTaskEstimates."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+
+    restoredTemplate = RestoreTaskEstimateTemplate(ws, tbl)
+    If restoredTemplate Then
+        RemoveTaskEstimateActionButtons ws
+        mTaskEstimateMaxActionRow = 0
+        MarkTaskEstimateRefreshFrom 1
+    End If
+
+    RefreshTaskEstimateTable tbl
+    AddTaskEstimateTopButtons ws
+    SyncTaskEstimateActionButtons ws
+
+SafeExit:
+    mQuarterPlanUiBusy = False
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "RefreshTaskEstimateActionGrid: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Sub SetupTaskEstimateActionUi(ByVal ws As Worksheet)
+    Dim tbl As ListObject
+    Dim restoredTemplate As Boolean
+
+    On Error GoTo Fail
+
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If TaskEstimateTemplateNeedsRestore(ws, tbl) Then
+        restoredTemplate = RestoreTaskEstimateTemplate(ws, tbl)
+        RemoveTaskEstimateActionButtons ws
+        mTaskEstimateMaxActionRow = 0
+        MarkTaskEstimateRefreshFrom 1
+    End If
+
+    If restoredTemplate Or mTaskEstimateRefreshStartRow > 0 Then
+        RefreshTaskEstimateTable tbl
+    End If
+    AddTaskEstimateTopButtons ws
+    SyncTaskEstimateActionButtons ws
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "SetupTaskEstimateActionUi: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Function TaskEstimateTemplateNeedsRestore(ByVal ws As Worksheet, ByVal tbl As ListObject) As Boolean
+    Dim targetRange As Range
+
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet is not available."
+    If tbl Is Nothing Then Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl Is Nothing Then Err.Raise 9, , "tblTaskEstimates not found."
+
+    If tbl.Range.Row <> QP_TASK_HEADER_ROW Or tbl.Range.Column <> EST_COL_PRIORITY + 2 Then
+        Err.Raise 5, , "tblTaskEstimates must start at C3 for template recovery."
+    End If
+
+    Set targetRange = ws.Range(QP_TASK_TABLE_RANGE)
+    TaskEstimateTemplateNeedsRestore = (tbl.Range.Address(False, False) <> targetRange.Address(False, False))
+End Function
+
+Public Sub RemoveTaskEstimateActionButtons(ByVal ws As Worksheet)
+    Dim shapeIndex As Long
+    Dim shapeName As String
+
+    On Error Resume Next
+    ws.Shapes(TASK_ESTIMATE_IMPORT_XLSX_SHAPE_NAME).Delete
+    ws.Shapes(TASK_ESTIMATE_IMPORT_SHAPE_NAME).Delete
+    ws.Shapes(TASK_ESTIMATE_CLEAR_SHAPE_NAME).Delete
+    ws.Shapes(TASK_ESTIMATE_REFRESH_SHAPE_NAME).Delete
+    ws.Shapes(TASK_ESTIMATE_EXPORT_SHAPE_NAME).Delete
+    For shapeIndex = ws.Shapes.Count To 1 Step -1
+        shapeName = ws.Shapes(shapeIndex).Name
+        If Left$(shapeName, Len(TASK_ESTIMATE_ACTION_SHAPE_PREFIX)) = TASK_ESTIMATE_ACTION_SHAPE_PREFIX Then
+            ws.Shapes(shapeIndex).Delete
+        End If
+    Next shapeIndex
+    On Error GoTo 0
+End Sub
+
+Public Sub AddTaskEstimateTopButtons(ByVal ws As Worksheet)
+    On Error GoTo Fail
+
+    AddTaskEstimateTopButton ws, TASK_ESTIMATE_CLEAR_SHAPE_NAME, TASK_ESTIMATE_CLEAR_CELL, TASK_ESTIMATE_CLEAR_RANGE, TaskEstimateTextClearAll(), "RunTaskEstimateClearAll"
+    AddTaskEstimateTopButton ws, TASK_ESTIMATE_REFRESH_SHAPE_NAME, TASK_ESTIMATE_REFRESH_CELL, TASK_ESTIMATE_REFRESH_RANGE, TaskEstimateTextRefresh(), "RunTaskEstimateRefresh"
+    AddTaskEstimateTopButton ws, TASK_ESTIMATE_EXPORT_SHAPE_NAME, TASK_ESTIMATE_EXPORT_CELL, TASK_ESTIMATE_EXPORT_RANGE, TaskEstimateTextExportXlsx(), "RunTaskEstimateExportXlsx"
+    AddTaskEstimateTopButton ws, TASK_ESTIMATE_IMPORT_XLSX_SHAPE_NAME, TASK_ESTIMATE_IMPORT_XLSX_CELL, TASK_ESTIMATE_IMPORT_XLSX_RANGE, TaskEstimateTextImportXlsx(), "RunTaskEstimateImportXlsx"
+    AddTaskEstimateTopButton ws, TASK_ESTIMATE_IMPORT_SHAPE_NAME, TASK_ESTIMATE_IMPORT_CELL, TASK_ESTIMATE_IMPORT_RANGE, TaskEstimateImportCaption(ws), "RunTaskEstimateImportCsv"
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "AddTaskEstimateTopButtons: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub AddTaskEstimateTopButton(ByVal ws As Worksheet, ByVal shapeName As String, ByVal cellAddress As String, ByVal rangeAddress As String, ByVal caption As String, ByVal macroName As String)
+    Dim anchorCell As Range
+    Dim buttonRange As Range
+    Dim shp As Shape
+
+    On Error GoTo Fail
+
+    Set anchorCell = ws.Range(cellAddress)
+    Set buttonRange = ws.Range(rangeAddress)
+    anchorCell.Value = caption
+
+    On Error Resume Next
+    Set shp = ws.Shapes(shapeName)
+    On Error GoTo Fail
+
+    If shp Is Nothing Then
+        AddTaskEstimateButton ws, shapeName, buttonRange, caption, macroName
+    Else
+        If shp.OnAction <> WorkbookMacroName(macroName) Then shp.OnAction = WorkbookMacroName(macroName)
+        If CStr(shp.TextFrame.Characters.Text) <> caption Then shp.TextFrame.Characters.Text = caption
+    End If
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "AddTaskEstimateTopButton: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Shape: " & shapeName & vbCrLf & _
+        "Range: " & rangeAddress, vbExclamation
+End Sub
+
+Public Function TaskEstimateImportCaption(ByVal ws As Worksheet) As String
+    Dim tbl As ListObject
+    Dim maxRows As Long
+
+    On Error Resume Next
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    On Error GoTo 0
+
+    If Not tbl Is Nothing Then
+        If Not tbl.DataBodyRange Is Nothing Then maxRows = tbl.DataBodyRange.Rows.Count
+    End If
+    If maxRows <= 0 Then maxRows = QP_TASK_ROWS
+
+    TaskEstimateImportCaption = TaskEstimateTextImportCsvPrefix() & CStr(maxRows) & ")"
+End Function
+
+Public Function RestoreTaskEstimateTemplate(ByVal ws As Worksheet, ByRef tbl As ListObject) As Boolean
+    Dim targetRange As Range
+
+    On Error GoTo Fail
+
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet is not available."
+    If tbl Is Nothing Then Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl Is Nothing Then Err.Raise 9, , "tblTaskEstimates not found."
+
+    If tbl.Range.Row <> QP_TASK_HEADER_ROW Or tbl.Range.Column <> EST_COL_PRIORITY + 2 Then
+        Err.Raise 5, , "tblTaskEstimates must start at C3 for template recovery."
+    End If
+
+    Set targetRange = ws.Range(QP_TASK_TABLE_RANGE)
+    If tbl.Range.Address(False, False) <> targetRange.Address(False, False) Then
+        tbl.Resize targetRange
+        RestoreTaskEstimateTemplate = True
+        Set tbl = ws.ListObjects("tblTaskEstimates")
+    End If
+
+    RestoreTaskEstimateTemplateHeader ws
+    RestoreTaskEstimateTemplateStyles ws, tbl
+    RestoreTaskEstimateTemplateValidation ws
+    RestoreTaskEstimateTemplateStats ws
+    Exit Function
+
+Fail:
+    Err.Raise Err.Number, "RestoreTaskEstimateTemplate", Err.Description
+End Function
+
+Public Sub RestoreTaskEstimateTemplateHeader(ByVal ws As Worksheet)
+    Dim headers As Variant
+    Dim index As Long
+
+    headers = Array(">", "x", TaskEstimateHeaderPriority(), TaskEstimateHeaderDirection(), TaskEstimateHeaderDescription(), _
+        TaskEstimateHeaderTicket(), TaskEstimateHeaderNote(), "AN", "BE", "FE", "QA", TaskEstimateHeaderComment(), TaskEstimateTextExportXlsx())
+    For index = LBound(headers) To UBound(headers)
+        ws.Cells(QP_TASK_HEADER_ROW, index + 1).Value = headers(index)
+    Next index
+End Sub
+
+Public Sub RestoreTaskEstimateTemplateStyles(ByVal ws As Worksheet, ByVal tbl As ListObject)
+    Dim headerRange As Range
+    Dim actionRange As Range
+    Dim inputRange As Range
+
+    Set headerRange = ws.Range("A" & QP_TASK_HEADER_ROW & ":M" & QP_TASK_HEADER_ROW)
+    Set actionRange = Union(ws.Range("A" & QP_TASK_FIRST_ROW & ":B" & QP_TASK_LAST_ROW), ws.Range("M" & QP_TASK_FIRST_ROW & ":M" & QP_TASK_LAST_ROW))
+    Set inputRange = ws.Range("C" & QP_TASK_FIRST_ROW & ":L" & QP_TASK_LAST_ROW)
+
+    With headerRange
+        .Interior.Color = RGB(217, 234, 247)
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Bold = True
+        .Font.Color = RGB(31, 31, 31)
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Color = RGB(128, 128, 128)
+    End With
+
+    With actionRange
+        .Interior.Color = RGB(217, 234, 247)
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Bold = True
+        .Font.Color = RGB(31, 78, 121)
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Color = RGB(128, 128, 128)
+    End With
+
+    With inputRange
+        .Interior.Color = RGB(255, 242, 204)
+        .Font.Name = DESIGN_FONT_NAME
+        .Font.Size = DESIGN_FONT_SIZE
+        .Font.Bold = False
+        .Font.Color = RGB(31, 31, 31)
+        .HorizontalAlignment = xlGeneral
+        .VerticalAlignment = xlCenter
+        .WrapText = True
+        .Borders.LineStyle = xlContinuous
+        .Borders.Color = RGB(128, 128, 128)
+    End With
+
+    ws.Range("C" & QP_TASK_FIRST_ROW & ":C" & QP_TASK_LAST_ROW).NumberFormat = "0"
+    ws.Range("H" & QP_TASK_FIRST_ROW & ":K" & QP_TASK_LAST_ROW).NumberFormat = "0.00"
+End Sub
+
+Public Sub RestoreTaskEstimateTemplateValidation(ByVal ws As Worksheet)
+    With ws.Range("C" & QP_TASK_FIRST_ROW & ":C" & QP_TASK_LAST_ROW).Validation
+        .Delete
+        .Add Type:=xlValidateWholeNumber, AlertStyle:=xlValidAlertStop, Operator:=xlBetween, Formula1:="1", Formula2:="999"
+        .IgnoreBlank = True
+    End With
+
+    With ws.Range("H" & QP_TASK_FIRST_ROW & ":K" & QP_TASK_LAST_ROW).Validation
+        .Delete
+        .Add Type:=xlValidateDecimal, AlertStyle:=xlValidAlertStop, Operator:=xlGreaterEqual, Formula1:="0"
+        .IgnoreBlank = True
+    End With
+End Sub
+
+Public Sub RestoreTaskEstimateTemplateStats(ByVal ws As Worksheet)
+    ws.Range("H1").Value = TaskEstimateTextStatistics()
+    ws.Range("H2").Formula = "=SUM(H" & QP_TASK_FIRST_ROW & ":H" & QP_TASK_LAST_ROW & ")"
+    ws.Range("I2").Formula = "=SUM(I" & QP_TASK_FIRST_ROW & ":I" & QP_TASK_LAST_ROW & ")"
+    ws.Range("J2").Formula = "=SUM(J" & QP_TASK_FIRST_ROW & ":J" & QP_TASK_LAST_ROW & ")"
+    ws.Range("K2").Formula = "=SUM(K" & QP_TASK_FIRST_ROW & ":K" & QP_TASK_LAST_ROW & ")"
+    ws.Range("H2:K2").NumberFormat = "0.00"
+End Sub
+
+Public Sub AddTaskEstimateShapeButtons(ByVal ws As Worksheet)
+    AddTaskEstimateTableActionButtons ws.ListObjects("tblTaskEstimates")
+End Sub
+
+Public Sub SyncTaskEstimateActionButtons(ByVal ws As Worksheet)
+    On Error GoTo Fail
+
+    Dim tbl As ListObject
+    Dim rowIndex As Long
+    Dim colIndex As Variant
+    Dim actionCell As Range
+    Dim shapeName As String
+    Dim macroName As String
+    Dim currentMaxRow As Long
+    Dim syncMaxRow As Long
+    Dim syncStartRow As Long
+
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    currentMaxRow = LastTaskEstimateUsedRow(tbl)
+    syncMaxRow = currentMaxRow + 1
+    If mTaskEstimateMaxActionRow + 1 > syncMaxRow Then syncMaxRow = mTaskEstimateMaxActionRow + 1
+    If syncMaxRow < 1 Then syncMaxRow = 1
+    If syncMaxRow > tbl.DataBodyRange.Rows.Count Then syncMaxRow = tbl.DataBodyRange.Rows.Count
+    syncStartRow = mTaskEstimateRefreshStartRow
+    If syncStartRow < 1 Then syncStartRow = 1
+    If syncStartRow > syncMaxRow Then syncStartRow = syncMaxRow
+
+    For rowIndex = syncStartRow To syncMaxRow
+        For Each colIndex In Array(EST_SHEET_COL_ACTION_DECOMPOSE, EST_SHEET_COL_ACTION_DELETE, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+            Set actionCell = ws.Cells(tbl.DataBodyRange.Row + rowIndex - 1, CLng(colIndex))
+            shapeName = TaskEstimateActionShapeName(rowIndex, CLng(colIndex))
+            If Trim$(CStr(actionCell.Value)) = "" Then
+                DeleteShapeIfExists ws, shapeName
+            Else
+                macroName = "RunTaskEstimateCellAction"
+                If CLng(colIndex) = EST_SHEET_COL_ACTION_EXPRESS_EXPORT Then macroName = "RunTaskEstimateExpressExport"
+                EnsureTaskEstimateButton ws, shapeName, actionCell, CStr(actionCell.Value), macroName
+            End If
+        Next colIndex
+    Next rowIndex
+    mTaskEstimateMaxActionRow = currentMaxRow
+    mTaskEstimateRefreshStartRow = 0
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "SyncTaskEstimateActionButtons: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Function LastTaskEstimateUsedRow(ByVal tbl As ListObject) As Long
+    Dim rowIndex As Long
+
+    For rowIndex = tbl.DataBodyRange.Rows.Count To 1 Step -1
+        If TaskEstimateRowHasTask(tbl, rowIndex) Then
+            LastTaskEstimateUsedRow = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Sub MarkTaskEstimateRefreshFrom(ByVal rowIndex As Long)
+    If rowIndex < 1 Then rowIndex = 1
+    If mTaskEstimateRefreshStartRow = 0 Or rowIndex < mTaskEstimateRefreshStartRow Then
+        mTaskEstimateRefreshStartRow = rowIndex
+    End If
+End Sub
+
+Public Sub MarkTaskEstimateRefreshForTarget(ByVal ws As Worksheet, ByVal Target As Range)
+    On Error GoTo SafeExit
+
+    Dim tbl As ListObject
+    Dim affected As Range
+    Dim firstRow As Long
+
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    If tbl Is Nothing Then Exit Sub
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    Set affected = Intersect(Target, ws.Range("A" & QP_TASK_FIRST_ROW & ":M" & QP_TASK_LAST_ROW))
+    If affected Is Nothing Then Exit Sub
+
+    firstRow = affected.Row - tbl.DataBodyRange.Row + 1
+    If firstRow < 1 Then firstRow = 1
+    MarkTaskEstimateRefreshFrom firstRow
+
+SafeExit:
+End Sub
+
+Public Function TaskEstimateIdInList(ByVal taskId As String, ByRef valueList() As String, ByVal valueCount As Long) As Boolean
+    Dim index As Long
+    Dim normalizedTaskId As String
+
+    normalizedTaskId = Trim$(taskId)
+    If normalizedTaskId = "" Then Exit Function
+
+    For index = 1 To valueCount
+        If valueList(index) = normalizedTaskId Then
+            TaskEstimateIdInList = True
+            Exit Function
+        End If
+    Next index
+End Function
+
+Public Sub EnsureTaskEstimateButton(ByVal ws As Worksheet, ByVal shapeName As String, ByVal anchorCell As Range, ByVal caption As String, ByVal macroName As String)
+    Dim shp As Shape
+
+    On Error Resume Next
+    Set shp = ws.Shapes(shapeName)
+    On Error GoTo 0
+
+    If shp Is Nothing Then
+        AddTaskEstimateButton ws, shapeName, anchorCell, caption, macroName
+    Else
+        Exit Sub
+    End If
+End Sub
+
+Public Sub DeleteShapeIfExists(ByVal ws As Worksheet, ByVal shapeName As String)
+    On Error Resume Next
+    ws.Shapes(shapeName).Delete
+    On Error GoTo 0
+End Sub
+
+Public Sub RemoveStaleTaskEstimateActionButtons(ByVal ws As Worksheet, ByVal tbl As ListObject)
+    Dim shapeIndex As Long
+    Dim shp As Shape
+    Dim actionCell As Range
+
+    On Error Resume Next
+    For shapeIndex = ws.Shapes.Count To 1 Step -1
+        Set shp = ws.Shapes(shapeIndex)
+        If Left$(shp.Name, Len(TASK_ESTIMATE_ACTION_SHAPE_PREFIX)) = TASK_ESTIMATE_ACTION_SHAPE_PREFIX Then
+            Set actionCell = shp.TopLeftCell
+            If actionCell.Row < tbl.DataBodyRange.Row _
+                Or actionCell.Row > tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1 _
+                Or (actionCell.Column <> EST_SHEET_COL_ACTION_DECOMPOSE _
+                    And actionCell.Column <> EST_SHEET_COL_ACTION_DELETE _
+                    And actionCell.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT) _
+                Or Trim$(CStr(actionCell.Value)) = "" Then
+                shp.Delete
+            End If
+        End If
+    Next shapeIndex
+    On Error GoTo 0
+End Sub
+
+Public Sub AddTaskEstimateTableActionButtons(ByVal tbl As ListObject)
+    On Error GoTo Fail
+
+    Dim rowIndex As Long
+    Dim colIndex As Variant
+    Dim actionCell As Range
+    Dim shapeName As String
+    Dim macroName As String
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        For Each colIndex In Array(EST_SHEET_COL_ACTION_DECOMPOSE, EST_SHEET_COL_ACTION_DELETE, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+            Set actionCell = tbl.Parent.Cells(tbl.DataBodyRange.Row + rowIndex - 1, CLng(colIndex))
+            If Trim$(CStr(actionCell.Value)) <> "" Then
+                shapeName = TaskEstimateActionShapeName(rowIndex, CLng(colIndex))
+                macroName = "RunTaskEstimateCellAction"
+                If CLng(colIndex) = EST_SHEET_COL_ACTION_EXPRESS_EXPORT Then macroName = "RunTaskEstimateExpressExport"
+                AddTaskEstimateButton tbl.Parent, shapeName, actionCell, CStr(actionCell.Value), macroName
+            End If
+        Next colIndex
+    Next rowIndex
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "AddTaskEstimateTableActionButtons: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Function TaskEstimateActionShapeName(ByVal rowIndex As Long, ByVal colIndex As Long) As String
+    TaskEstimateActionShapeName = TASK_ESTIMATE_ACTION_SHAPE_PREFIX & Format$(rowIndex, "00") & "_" & CStr(colIndex)
+End Function
+
+Public Sub AddTaskEstimateButton(ByVal ws As Worksheet, ByVal shapeName As String, ByVal anchorCell As Range, ByVal caption As String, ByVal macroName As String)
+    On Error GoTo Fail
+
+    Dim shp As Shape
+
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, anchorCell.Left, anchorCell.Top, anchorCell.Width, anchorCell.Height)
+    shp.Name = shapeName
+    shp.OnAction = WorkbookMacroName(macroName)
+    shp.Fill.ForeColor.RGB = RGB(31, 78, 121)
+    shp.Line.ForeColor.RGB = RGB(31, 78, 121)
+    shp.TextFrame.Characters.Text = caption
+    shp.TextFrame.HorizontalAlignment = xlHAlignCenter
+    shp.TextFrame.VerticalAlignment = xlVAlignCenter
+    shp.TextFrame.Characters.Font.Name = DESIGN_FONT_NAME
+    shp.TextFrame.Characters.Font.Size = DESIGN_FONT_SIZE
+    shp.TextFrame.Characters.Font.Bold = True
+    shp.TextFrame.Characters.Font.Color = RGB(255, 255, 255)
+    shp.Placement = xlMoveAndSize
+    shp.ZOrder msoBringToFront
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "AddTaskEstimateButton: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Shape: " & shapeName & vbCrLf & _
+        "Cell: " & anchorCell.Address(False, False), vbExclamation
+End Sub
+
+Public Sub RemoveQuarterPlanActionButtons(ByVal ws As Worksheet)
+    Dim shapeIndex As Long
+    Dim shapeName As String
+
+    On Error Resume Next
+    ws.Shapes("btnQuarterPlanReloadBacklog").Delete
+    ws.Shapes("btnQuarterPlanRecalculate").Delete
+    ws.Shapes("btnQuarterPlanExportBacklog").Delete
+    ws.Shapes("btnQuarterPlanAddAllBacklog").Delete
+    For shapeIndex = ws.Shapes.Count To 1 Step -1
+        shapeName = ws.Shapes(shapeIndex).Name
+        If Left$(shapeName, Len(QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX)) = QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX _
+            Or Left$(shapeName, Len(QUARTER_PLAN_CELL_ACTION_LEGACY_PREFIX)) = QUARTER_PLAN_CELL_ACTION_LEGACY_PREFIX Then
+            ws.Shapes(shapeIndex).Delete
+        End If
+    Next shapeIndex
+    On Error GoTo 0
+End Sub
+
+Public Sub AddQuarterPlanShapeButtons(ByVal ws As Worksheet)
+    AddQuarterPlanButton ws, "btnQuarterPlanReloadBacklog", ws.Range("G2"), QuarterPlanButtonCaption(ws.Range("G2"), QuarterPlanTextReloadBacklog()), "RunQuarterPlanReloadBacklog"
+    AddQuarterPlanButton ws, "btnQuarterPlanRecalculate", ws.Range("P2"), QuarterPlanButtonCaption(ws.Range("P2"), QuarterPlanTextRecalculatePlan()), "RunQuarterPlanRecalculate"
+    AddQuarterPlanButton ws, "btnQuarterPlanExportBacklog", ws.Range("Q2"), QuarterPlanButtonCaption(ws.Range("Q2"), QuarterPlanTextExportBacklog()), "RunQuarterPlanExportBacklog"
+    AddQuarterPlanButton ws, "btnQuarterPlanAddAllBacklog", ws.Range(QP_BACKLOG_ACTION_CELL), QuarterPlanTextAddAllToPlan(), "RunQuarterPlanAddAllBacklogToPlan"
+    AddQuarterPlanTableActionButtons ws.ListObjects("tblPlanActive")
+    AddQuarterPlanTableActionButtons ws.ListObjects("tblPlanGrey")
+    AddQuarterPlanTableActionButtons ws.ListObjects("tblPlanBacklog")
+End Sub
+
+Public Function QuarterPlanButtonCaption(ByVal anchorCell As Range, ByVal fallbackText As String) As String
+    QuarterPlanButtonCaption = Trim$(CStr(anchorCell.Value))
+    If QuarterPlanButtonCaption = "" Then QuarterPlanButtonCaption = fallbackText
+End Function
+
+Public Sub AddQuarterPlanTableActionButtons(ByVal tbl As ListObject)
+    On Error GoTo SafeExit
+
+    Dim rowIndex As Long
+    Dim colIndex As Long
+    Dim actionCell As Range
+    Dim shapeName As String
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        For colIndex = 1 To PLAN_COL_ACTION_DOWN
+            Set actionCell = tbl.DataBodyRange.Cells(rowIndex, colIndex)
+            If Trim$(CStr(actionCell.Value)) <> "" Then
+                shapeName = QuarterPlanActionShapeName(tbl.Name, rowIndex, colIndex)
+                AddQuarterPlanButton tbl.Parent, shapeName, actionCell, CStr(actionCell.Value), _
+                    "RunQuarterPlanCellAction"
+            End If
+        Next colIndex
+    Next rowIndex
+
+SafeExit:
+End Sub
+
+Public Sub SyncQuarterPlanTableActionButtons(ByVal tbl As ListObject)
+    On Error GoTo SafeExit
+
+    Dim rowIndex As Long
+    Dim colIndex As Long
+    Dim actionCell As Range
+    Dim shapeName As String
+
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
+        For colIndex = 1 To PLAN_COL_ACTION_DOWN
+            Set actionCell = tbl.DataBodyRange.Cells(rowIndex, colIndex)
+            shapeName = QuarterPlanActionShapeName(tbl.Name, rowIndex, colIndex)
+            If Trim$(CStr(actionCell.Value)) <> "" Then
+                If Not QuarterPlanShapeExists(tbl.Parent, shapeName) Then
+                    AddQuarterPlanButton tbl.Parent, shapeName, actionCell, CStr(actionCell.Value), _
+                        "RunQuarterPlanCellAction"
+                End If
+            Else
+                DeleteQuarterPlanShapeIfExists tbl.Parent, shapeName
+            End If
+        Next colIndex
+    Next rowIndex
+
+SafeExit:
+End Sub
+
+Public Function QuarterPlanShapeExists(ByVal ws As Worksheet, ByVal shapeName As String) As Boolean
+    Dim shp As Shape
+
+    On Error Resume Next
+    Set shp = ws.Shapes(shapeName)
+    QuarterPlanShapeExists = Not shp Is Nothing
+    Set shp = Nothing
+    On Error GoTo 0
+End Function
+
+Public Sub DeleteQuarterPlanShapeIfExists(ByVal ws As Worksheet, ByVal shapeName As String)
+    On Error Resume Next
+    ws.Shapes(shapeName).Delete
+    On Error GoTo 0
+End Sub
+
+Public Function QuarterPlanActionShapeName(ByVal tableName As String, ByVal rowIndex As Long, ByVal colIndex As Long) As String
+    Dim tableCode As String
+
+    Select Case tableName
+        Case "tblPlanActive"
+            tableCode = "a"
+        Case "tblPlanGrey"
+            tableCode = "g"
+        Case "tblPlanBacklog"
+            tableCode = "b"
+        Case Else
+            tableCode = "x"
+    End Select
+
+    QuarterPlanActionShapeName = QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX & tableCode & "_" & Format$(rowIndex, "00") & "_" & CStr(colIndex)
+End Function
+
+Public Sub AddQuarterPlanButton(ByVal ws As Worksheet, ByVal shapeName As String, ByVal anchorCell As Range, ByVal caption As String, ByVal macroName As String)
+    On Error GoTo SafeExit
+
+    Dim anchorRange As Range
+    Dim shp As Shape
+
+    Set anchorRange = anchorCell
+    If anchorRange.MergeCells Then Set anchorRange = anchorRange.MergeArea
+
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, anchorRange.Left, anchorRange.Top, anchorRange.Width, anchorRange.Height)
+    shp.Name = shapeName
+    shp.OnAction = WorkbookMacroName(macroName)
+    shp.Fill.ForeColor.RGB = RGB(31, 78, 121)
+    shp.Line.ForeColor.RGB = RGB(31, 78, 121)
+    shp.TextFrame.Characters.Text = caption
+    shp.TextFrame.HorizontalAlignment = xlHAlignCenter
+    shp.TextFrame.VerticalAlignment = xlVAlignCenter
+    shp.TextFrame.Characters.Font.Name = DESIGN_FONT_NAME
+    shp.TextFrame.Characters.Font.Size = DESIGN_FONT_SIZE
+    shp.TextFrame.Characters.Font.Bold = True
+    shp.TextFrame.Characters.Font.Color = RGB(255, 255, 255)
+    shp.Placement = xlMoveAndSize
+    shp.ZOrder msoBringToFront
+
+SafeExit:
+End Sub
+
+Public Sub ButtonReloadQuarterPlanBacklog()
+    mQuarterPlanClosing = False
+    If mQuarterPlanUiBusy Then Exit Sub
+    ReloadQuarterPlanBacklogFromEstimates
+End Sub
+
+Public Sub ButtonRecalculateQuarterPlan()
+    Dim oldScreenUpdating As Boolean
+
+    mQuarterPlanClosing = False
+    If mQuarterPlanUiBusy Then Exit Sub
+
+    oldScreenUpdating = Application.ScreenUpdating
+    Application.ScreenUpdating = False
+    RecalculateQuarterPlan
+    Application.ScreenUpdating = oldScreenUpdating
+End Sub
+
+Public Sub ButtonExportQuarterPlanBacklog()
+    mQuarterPlanClosing = False
+    If mQuarterPlanUiBusy Then Exit Sub
+    ExportQuarterPlanBacklogWithPrompt
+End Sub
+
+Public Sub ButtonAddAllQuarterPlanBacklogToPlan()
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim sourceTbl As ListObject
+    Dim targetTbl As ListObject
+    Dim movedCount As Long
+
+    mQuarterPlanClosing = False
+    If mQuarterPlanUiBusy Then Exit Sub
+
+    mQuarterPlanActionRunning = True
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    Set ws = GetQuarterPlanWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Quarter plan worksheet not found by tblPlanActive."
+    Set sourceTbl = ws.ListObjects("tblPlanBacklog")
+    Set targetTbl = ws.ListObjects("tblPlanActive")
+
+    movedCount = MoveAllQuarterPlanTasksFast(sourceTbl, targetTbl)
+    RefreshQuarterPlanTable sourceTbl
+    RefreshQuarterPlanTable targetTbl
+    SyncQuarterPlanTableActionButtons sourceTbl
+    SyncQuarterPlanTableActionButtons targetTbl
+
+    If movedCount = 0 Then
+        MsgBox "Не перенесено ни одной задачи: бэклог пуст или в активном плане нет свободных строк.", vbInformation
+    End If
+
+SafeExit:
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    mQuarterPlanActionRunning = False
+    Exit Sub
+
+Fail:
+    MsgBox "Ошибка RunQuarterPlanAddAllBacklogToPlan: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+    Resume SafeExit
+End Sub
+
+Public Sub AddQuarterPlanReloadBacklogLink(ByVal ws As Worksheet)
+    On Error GoTo SafeExit
+
+    Dim cell As Range
+    Set cell = ws.Range("G2")
+
+    cell.Hyperlinks.Delete
+    cell.Value = QuarterPlanTextReloadBacklog()
+    cell.Interior.Color = RGB(31, 78, 121)
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(255, 255, 255)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
+
+SafeExit:
+End Sub
+
+Public Sub AddQuarterPlanRecalculateLink(ByVal ws As Worksheet)
+    On Error GoTo SafeExit
+
+    Dim cell As Range
+    Set cell = ws.Range("P2")
+
+    cell.Hyperlinks.Delete
+    cell.Value = QuarterPlanTextRecalculatePlan()
+
+    cell.Interior.Color = RGB(31, 78, 121)
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(255, 255, 255)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
+SafeExit:
+End Sub
+
+Public Sub AddQuarterPlanExportBacklogLink(ByVal ws As Worksheet)
+    On Error GoTo SafeExit
+
+    Dim cell As Range
+    Set cell = ws.Range("Q2")
+
+    cell.Hyperlinks.Delete
+    cell.Value = QuarterPlanTextExportBacklog()
+    cell.Interior.Color = RGB(31, 78, 121)
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(255, 255, 255)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
+
+SafeExit:
+End Sub
+
+Public Sub AddQuarterPlanBacklogAddAllLink(ByVal ws As Worksheet)
+    On Error GoTo SafeExit
+
+    Dim cell As Range
+    Set cell = ws.Range(QP_BACKLOG_ACTION_CELL)
+
+    cell.Hyperlinks.Delete
+    cell.Value = QuarterPlanTextAddAllToPlan()
+    cell.Interior.Color = RGB(31, 78, 121)
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(255, 255, 255)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
+
+SafeExit:
+End Sub
+
+Public Sub AddQuarterPlanActionLink(ByVal ws As Worksheet, ByVal cell As Range)
+    On Error GoTo SafeExit
+
+    If Trim$(CStr(cell.Value)) = "" Then Exit Sub
+
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(255, 255, 255)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
+
+SafeExit:
+End Sub
+
+Public Function WorkbookMacroName(ByVal macroName As String) As String
+    WorkbookMacroName = macroName
+End Function

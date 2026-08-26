@@ -1,0 +1,146 @@
+Option Explicit
+
+Public Function RunQuarterPlanSchedulerUnitTests() As Long
+    Dim scenario As Long
+    For scenario = 1 To 32
+        RunQuarterPlanSchedulerScenario scenario
+        RunQuarterPlanSchedulerUnitTests = RunQuarterPlanSchedulerUnitTests + 1
+    Next scenario
+End Function
+
+Private Sub RunQuarterPlanSchedulerScenario(ByVal scenario As Long)
+    Dim tasks As Variant, resources As Variant, holidays As Variant, rules As Variant, result As Variant
+    Dim firstDate As Date, focusFactor As Double
+
+    firstDate = DateSerial(2026, 1, 5)
+    focusFactor = 1
+    ReDim tasks(1 To 2, 1 To 6)
+    tasks(1, 1) = True: tasks(1, 2) = "FULL"
+    tasks(1, 3) = 2: tasks(1, 4) = 2: tasks(1, 5) = 2: tasks(1, 6) = 2
+    resources = SchedulerTestResources()
+    rules = SchedulerTestRules()
+    holidays = Array()
+
+    Select Case scenario
+        Case 1: tasks(1, 1) = False
+        Case 2: tasks(1, 2) = "DEFER"
+        Case 3: tasks(1, 2) = "AN"
+        Case 4: tasks(1, 2) = "DEV"
+        Case 5: tasks(1, 2) = "BE"
+        Case 6: tasks(1, 2) = "FE"
+        Case 7: tasks(1, 2) = "FULL"
+        Case 8: tasks(1, 3) = 0
+        Case 9: tasks(1, 4) = 0
+        Case 10: tasks(1, 5) = 0
+        Case 11: tasks(1, 6) = 0
+        Case 12: tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 13: tasks(1, 3) = 5: tasks(1, 4) = 1: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 14: tasks(1, 3) = 6: tasks(1, 4) = 1: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 15: tasks(1, 3) = 0: tasks(1, 4) = 5: tasks(1, 5) = 1: tasks(1, 6) = 0
+        Case 16: tasks(1, 3) = 0: tasks(1, 4) = 6: tasks(1, 5) = 1: tasks(1, 6) = 0
+        Case 17: rules(5, 2) = 0
+        Case 18: rules(5, 2) = 0.5
+        Case 19: rules(5, 2) = 1
+        Case 20: resources(1, 2) = 0.5: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 21: holidays = Array(firstDate): tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 22: resources(1, 3) = firstDate: resources(1, 4) = DateAdd("d", 2, firstDate): tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 23
+            resources = SchedulerTestResourcesWithSecondAnalyst()
+            resources(1, 3) = firstDate: resources(1, 4) = DateAdd("d", 2, firstDate)
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 24: resources = SchedulerTestResourcesWithout("AN")
+        Case 25: resources = SchedulerTestResourcesWithout("BE")
+        Case 26: resources = SchedulerTestResourcesWithout("FE")
+        Case 27: resources = SchedulerTestResourcesWithout("QA")
+        Case 28
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            tasks(2, 1) = True: tasks(2, 2) = "AN": tasks(2, 3) = 1
+        Case 29
+            resources = SchedulerTestResourcesWithSecondAnalyst()
+            tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+            tasks(2, 1) = True: tasks(2, 2) = "AN": tasks(2, 3) = 1
+        Case 30: firstDate = DateSerial(2026, 1, 3): tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 31: tasks(1, 3) = 100: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+        Case 32: focusFactor = 0.5: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0
+    End Select
+
+    result = QuarterPlanSchedule(tasks, resources, holidays, rules, firstDate, focusFactor)
+    AssertSchedulerScenario scenario, result, firstDate
+End Sub
+
+Private Sub AssertSchedulerScenario(ByVal scenario As Long, ByRef result As Variant, ByVal firstDate As Date)
+    Select Case scenario
+        Case 1: SchedulerAssert IsEmpty(result(1, 1)), scenario, "empty task was scheduled"
+        Case 2: SchedulerAssert result(1, 1) = 8 And IsEmpty(result(1, 2)), scenario, "deferred task"
+        Case 3: SchedulerAssert Not IsEmpty(result(1, 3)) And IsEmpty(result(1, 4)), scenario, "analysis-only status"
+        Case 4: SchedulerAssert Not IsEmpty(result(1, 4)) And IsEmpty(result(1, 6)), scenario, "development-ready status"
+        Case 5: SchedulerAssert Not IsEmpty(result(1, 4)) And IsEmpty(result(1, 5)), scenario, "backend-ready status"
+        Case 6: SchedulerAssert IsEmpty(result(1, 4)) And Not IsEmpty(result(1, 5)), scenario, "frontend-ready status"
+        Case 7: SchedulerAssert Not IsEmpty(result(1, 3)) And Not IsEmpty(result(1, 6)), scenario, "full path"
+        Case 8: SchedulerAssert IsEmpty(result(1, 3)) And Not IsEmpty(result(1, 4)), scenario, "zero AN"
+        Case 9: SchedulerAssert IsEmpty(result(1, 4)) And Not IsEmpty(result(1, 5)), scenario, "zero BE"
+        Case 10: SchedulerAssert IsEmpty(result(1, 5)) And Not IsEmpty(result(1, 6)), scenario, "zero FE"
+        Case 11: SchedulerAssert IsEmpty(result(1, 6)) And IsDate(result(1, 2)), scenario, "zero QA"
+        Case 12: SchedulerAssert result(1, 1) = 0 And IsEmpty(result(1, 2)), scenario, "all stages zero"
+        Case 13: SchedulerAssert CDate(result(1, 9)) > CDate(result(1, 8)), scenario, "AN overlap lower boundary"
+        Case 14: SchedulerAssert CDate(result(1, 9)) <= CDate(result(1, 8)), scenario, "AN overlap upper boundary"
+        Case 15: SchedulerAssert CDate(result(1, 11)) > CDate(result(1, 10)), scenario, "BE overlap lower boundary"
+        Case 16: SchedulerAssert CDate(result(1, 11)) <= CDate(result(1, 10)), scenario, "BE overlap upper boundary"
+        Case 17: SchedulerAssert CDate(result(1, 13)) > CDate(result(1, 10)), scenario, "QA second part only"
+        Case 18: SchedulerAssert CDate(result(1, 13)) <= CDate(result(1, 10)), scenario, "QA split overlap"
+        Case 19: SchedulerAssert IsDate(result(1, 13)) And IsDate(result(1, 14)), scenario, "QA first part only"
+        Case 20: SchedulerAssert result(1, 3) = 4, scenario, "allocation"
+        Case 21: SchedulerAssert CDate(result(1, 7)) = DateAdd("d", 1, firstDate), scenario, "holiday"
+        Case 22: SchedulerAssert CDate(result(1, 7)) = DateAdd("d", 3, firstDate), scenario, "vacation"
+        Case 23: SchedulerAssert CDate(result(1, 7)) = firstDate, scenario, "employee replacement"
+        Case 24: SchedulerAssert InStr(1, CStr(result(1, 15)), "AN", vbTextCompare) > 0, scenario, "missing AN"
+        Case 25: SchedulerAssert InStr(1, CStr(result(1, 15)), "BE", vbTextCompare) > 0, scenario, "missing BE"
+        Case 26: SchedulerAssert InStr(1, CStr(result(1, 15)), "FE", vbTextCompare) > 0, scenario, "missing FE"
+        Case 27: SchedulerAssert InStr(1, CStr(result(1, 15)), "QA", vbTextCompare) > 0, scenario, "missing QA"
+        Case 28: SchedulerAssert CDate(result(2, 7)) > CDate(result(1, 8)), scenario, "task competition"
+        Case 29: SchedulerAssert CDate(result(2, 7)) = CDate(result(1, 7)), scenario, "parallel replacement resource"
+        Case 30: SchedulerAssert Weekday(CDate(result(1, 7)), vbMonday) = 1, scenario, "weekend start"
+        Case 31: SchedulerAssert CDate(result(1, 2)) > DateAdd("d", 100, firstDate), scenario, "long task beyond quarter"
+        Case 32: SchedulerAssert result(1, 1) = 4 And result(1, 3) = 4, scenario, "focus factor"
+    End Select
+End Sub
+
+Private Function SchedulerTestResources() As Variant
+    Dim result(1 To 4, 1 To 8) As Variant
+    result(1, 1) = "AN": result(1, 2) = 1
+    result(2, 1) = "BE": result(2, 2) = 1
+    result(3, 1) = "FE": result(3, 2) = 1
+    result(4, 1) = "QA": result(4, 2) = 1
+    SchedulerTestResources = result
+End Function
+
+Private Function SchedulerTestResourcesWithSecondAnalyst() As Variant
+    Dim result(1 To 5, 1 To 8) As Variant, base As Variant, rowIndex As Long, colIndex As Long
+    base = SchedulerTestResources()
+    For rowIndex = 1 To 4: For colIndex = 1 To 8: result(rowIndex, colIndex) = base(rowIndex, colIndex): Next colIndex: Next rowIndex
+    result(5, 1) = "AN": result(5, 2) = 1
+    SchedulerTestResourcesWithSecondAnalyst = result
+End Function
+
+Private Function SchedulerTestResourcesWithout(ByVal excludedCode As String) As Variant
+    Dim result(1 To 3, 1 To 8) As Variant, codes As Variant, sourceIndex As Long, targetIndex As Long
+    codes = Array("AN", "BE", "FE", "QA")
+    For sourceIndex = 0 To 3
+        If codes(sourceIndex) <> excludedCode Then targetIndex = targetIndex + 1: result(targetIndex, 1) = codes(sourceIndex): result(targetIndex, 2) = 1
+    Next sourceIndex
+    SchedulerTestResourcesWithout = result
+End Function
+
+Private Function SchedulerTestRules() As Variant
+    Dim result(1 To 5, 1 To 2) As Variant
+    result(1, 1) = "AN_BE_MIN_WORKDAYS": result(1, 2) = 5
+    result(2, 1) = "AN_BE_COMPLETION_PERCENT": result(2, 2) = 0.5
+    result(3, 1) = "BE_FE_MIN_WORKDAYS": result(3, 2) = 5
+    result(4, 1) = "BE_FE_COMPLETION_PERCENT": result(4, 2) = 0.5
+    result(5, 1) = "QA_FIRST_PART_PERCENT": result(5, 2) = 0.5
+    SchedulerTestRules = result
+End Function
+
+Private Sub SchedulerAssert(ByVal condition As Boolean, ByVal scenario As Long, ByVal label As String)
+    If Not condition Then Err.Raise vbObjectError + 2100 + scenario, "QuarterPlanSchedulerTests", "Scenario " & scenario & " failed: " & label
+End Sub

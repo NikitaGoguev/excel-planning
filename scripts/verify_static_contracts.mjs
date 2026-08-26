@@ -3,11 +3,35 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import JSZip from "jszip";
+import {
+  deriveWorkbookLayout,
+  loadWorkbookLimits,
+  taskEstimateCsvCaption,
+} from "../src/config/workbook-limits.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(__filename), "..");
 
 const results = [];
+
+function layoutValue(layout, key) {
+  return key.split(".").reduce((value, segment) => value?.[segment], layout);
+}
+
+function resolveContractValue(value, layout) {
+  if (typeof value === "string") return value;
+  if (value?.layout) return layoutValue(layout, value.layout);
+  if (value?.template === "taskEstimateCsvCaption") return taskEstimateCsvCaption(layout.limits);
+  throw new Error(`Unsupported symbolic contract value: ${JSON.stringify(value)}`);
+}
+
+function requiredCells(contract, layout) {
+  const cells = { ...contract.requiredCells };
+  for (const [layoutKey, expected] of Object.entries(contract.requiredLayoutCells ?? {})) {
+    cells[layoutValue(layout, layoutKey)] = expected;
+  }
+  return cells;
+}
 
 function pass(name) {
   results.push({ ok: true, name });
@@ -224,7 +248,7 @@ function stableJson(value) {
   return value;
 }
 
-async function normalizedSnapshot(xlsmZip, buildContract, sheet03Contract, sheet04Contract, vbaContract) {
+async function normalizedSnapshot(xlsmZip, buildContract, sheet03Contract, sheet04Contract, vbaContract, layout) {
   const tables = await tableMap(xlsmZip);
   const sharedStrings = parseSharedStrings(await zipText(xlsmZip, "xl/sharedStrings.xml"));
   const tableRefs = {};
@@ -236,14 +260,14 @@ async function normalizedSnapshot(xlsmZip, buildContract, sheet03Contract, sheet
   const taskTable = tables.get("tblTaskEstimates");
   if (taskTable?.sheetPath) {
     const taskSheetXml = await zipText(xlsmZip, taskTable.sheetPath);
-    for (const cellRef of Object.keys(sheet03Contract.requiredCells)) {
+    for (const cellRef of Object.keys(requiredCells(sheet03Contract, layout))) {
       cells[`tblTaskEstimates:${cellRef}`] = cellValue(taskSheetXml, cellRef, sharedStrings);
     }
   }
   const backlogTable = tables.get("tblPlanBacklog");
   if (backlogTable?.sheetPath) {
     const planSheetXml = await zipText(xlsmZip, backlogTable.sheetPath);
-    for (const cellRef of Object.keys(sheet04Contract.requiredCells)) {
+    for (const cellRef of Object.keys(requiredCells(sheet04Contract, layout))) {
       cells[`tblPlanBacklog:${cellRef}`] = cellValue(planSheetXml, cellRef, sharedStrings);
     }
   }
@@ -315,9 +339,10 @@ async function assertPackageContracts(buildContract) {
   return { xlsxZip, xlsmZip };
 }
 
-async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract) {
+async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, layout) {
   const tables = await tableMap(xlsmZip);
-  for (const [name, expectedRef] of Object.entries(sheet03Contract.tables)) {
+  for (const [name, expectedValue] of Object.entries(sheet03Contract.tables)) {
+    const expectedRef = resolveContractValue(expectedValue, layout);
     const table = tables.get(name);
     if (!table) throw new Error(`table ${name} not found`);
     if (table.ref !== expectedRef) throw new Error(`table ${name} ref ${table.ref}, expected ${expectedRef}`);
@@ -327,13 +352,15 @@ async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract) {
   const sharedStrings = parseSharedStrings(await zipText(xlsmZip, "xl/sharedStrings.xml"));
   const taskTable = tables.get("tblTaskEstimates");
   const taskSheetXml = await zipText(xlsmZip, taskTable.sheetPath);
-  for (const [cellRef, expected] of Object.entries(sheet03Contract.requiredCells)) {
+  for (const [cellRef, expectedValue] of Object.entries(requiredCells(sheet03Contract, layout))) {
+    const expected = resolveContractValue(expectedValue, layout);
     const actual = cellValue(taskSheetXml, cellRef, sharedStrings);
     if (actual !== expected) throw new Error(`${cellRef} is ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
   }
   pass("sheet 03 action cells");
 
-  for (const [name, expectedRef] of Object.entries(sheet04Contract.tables)) {
+  for (const [name, expectedValue] of Object.entries(sheet04Contract.tables)) {
+    const expectedRef = resolveContractValue(expectedValue, layout);
     const table = tables.get(name);
     if (!table) throw new Error(`table ${name} not found`);
     if (table.ref !== expectedRef) throw new Error(`table ${name} ref ${table.ref}, expected ${expectedRef}`);
@@ -342,7 +369,8 @@ async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract) {
 
   const backlogTable = tables.get("tblPlanBacklog");
   const planSheetXml = await zipText(xlsmZip, backlogTable.sheetPath);
-  for (const [cellRef, expected] of Object.entries(sheet04Contract.requiredCells)) {
+  for (const [cellRef, expectedValue] of Object.entries(requiredCells(sheet04Contract, layout))) {
+    const expected = resolveContractValue(expectedValue, layout);
     const actual = cellValue(planSheetXml, cellRef, sharedStrings);
     if (actual !== expected) throw new Error(`${cellRef} is ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`);
   }
@@ -394,9 +422,15 @@ async function assertPortableSources() {
 }
 
 async function assertVbaContracts(vbaContract) {
+  const components = vbaContract.components ?? vbaContract.sources.map((source) => ({ source }));
   const sourceText = (
-    await Promise.all(vbaContract.sources.map((source) => fs.readFile(path.join(repoRoot, source), "utf8")))
+    await Promise.all(components.map(({ source }) => fs.readFile(path.join(repoRoot, source), "utf8")))
   ).join("\n");
+
+  const componentNames = components.map(({ name }) => name).filter(Boolean);
+  const duplicates = componentNames.filter((name, index) => componentNames.indexOf(name) !== index);
+  if (duplicates.length) throw new Error(`duplicate VBA components: ${[...new Set(duplicates)].join(", ")}`);
+  pass("VBA component manifest");
 
   for (const macro of vbaContract.requiredPublicMacros) {
     const pattern = new RegExp(`\\bPublic\\s+Sub\\s+${macro}\\b`, "i");
@@ -409,6 +443,32 @@ async function assertVbaContracts(vbaContract) {
     if (pattern.test(sourceText)) throw new Error(`forbidden VBA pattern found: ${forbidden.name}`);
   }
   pass("VBA forbidden patterns are absent");
+
+  if (vbaContract.scheduler) {
+    const schedulerComponent = components.find(({ name }) => name === vbaContract.scheduler.component);
+    if (!schedulerComponent) throw new Error(`scheduler component is missing: ${vbaContract.scheduler.component}`);
+    const schedulerSource = await fs.readFile(path.join(repoRoot, schedulerComponent.source), "utf8");
+    if (!new RegExp(`\\bPublic\\s+Function\\s+${vbaContract.scheduler.entrypoint}\\b`, "i").test(schedulerSource)) {
+      throw new Error(`scheduler entrypoint is missing: ${vbaContract.scheduler.entrypoint}`);
+    }
+    for (const sourcePattern of vbaContract.scheduler.forbiddenPatterns) {
+      if (new RegExp(sourcePattern, "i").test(schedulerSource)) throw new Error(`scheduler is not domain-pure: ${sourcePattern}`);
+    }
+    const testSource = await fs.readFile(path.join(repoRoot, vbaContract.scheduler.testSource), "utf8");
+    const scenarioMatch = testSource.match(/For\s+scenario\s*=\s*1\s+To\s+(\d+)/i);
+    if (!scenarioMatch || Number(scenarioMatch[1]) < vbaContract.scheduler.minimumScenarios) {
+      throw new Error(`scheduler scenario count is below ${vbaContract.scheduler.minimumScenarios}`);
+    }
+    pass("VBA scheduler domain boundary and scenario manifest");
+  }
+
+  const handwrittenText = (
+    await Promise.all(components.filter(({ generated }) => !generated).map(({ source }) => fs.readFile(path.join(repoRoot, source), "utf8")))
+  ).join("\n");
+  for (const sourcePattern of vbaContract.handwrittenLimitForbiddenPatterns ?? []) {
+    if (new RegExp(sourcePattern, "i").test(handwrittenText)) throw new Error(`handwritten VBA duplicates a generated limit: ${sourcePattern}`);
+  }
+  pass("VBA structural limits use generated constants");
 }
 
 async function assertWorkbookContract(workbookContract, xlsmZip) {
@@ -428,6 +488,7 @@ async function assertWorkbookContract(workbookContract, xlsmZip) {
 }
 
 try {
+  const layout = deriveWorkbookLayout(await loadWorkbookLimits());
   const buildContract = await readJson("contracts/build.contract.json");
   const sheet03Contract = await readJson("contracts/sheet03.contract.json");
   const sheet04Contract = await readJson("contracts/sheet04.contract.json");
@@ -439,11 +500,11 @@ try {
   await assertDesignContracts(buildContract);
   await assertFilterButtonContracts(buildContract);
   await assertWorkbookContract(workbookContract, xlsmZip);
-  await assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract);
+  await assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, layout);
   await assertVbaContracts(vbaContract);
   await assertSnapshot(
     workbookContract,
-    await normalizedSnapshot(xlsmZip, buildContract, sheet03Contract, sheet04Contract, vbaContract),
+    await normalizedSnapshot(xlsmZip, buildContract, sheet03Contract, sheet04Contract, vbaContract, layout),
   );
 } catch (error) {
   fail("static contracts", error.message);
