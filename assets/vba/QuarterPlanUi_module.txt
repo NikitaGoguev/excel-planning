@@ -274,6 +274,7 @@ Public Sub RestoreTaskEstimateTemplateHeader(ByVal ws As Worksheet)
     For index = LBound(headers) To UBound(headers)
         ws.Cells(QP_TASK_HEADER_ROW, index + 1).Value = headers(index)
     Next index
+    ws.Cells(QP_TASK_HEADER_ROW, EST_SHEET_COL_ACTION_COMMENT_OPTIONS).Value = "+"
 End Sub
 
 Public Sub RestoreTaskEstimateTemplateStyles(ByVal ws As Worksheet, ByVal tbl As ListObject)
@@ -281,8 +282,8 @@ Public Sub RestoreTaskEstimateTemplateStyles(ByVal ws As Worksheet, ByVal tbl As
     Dim actionRange As Range
     Dim inputRange As Range
 
-    Set headerRange = ws.Range("A" & QP_TASK_HEADER_ROW & ":M" & QP_TASK_HEADER_ROW)
-    Set actionRange = Union(ws.Range("A" & QP_TASK_FIRST_ROW & ":B" & QP_TASK_LAST_ROW), ws.Range("M" & QP_TASK_FIRST_ROW & ":M" & QP_TASK_LAST_ROW))
+    Set headerRange = ws.Range("A" & QP_TASK_HEADER_ROW & ":N" & QP_TASK_HEADER_ROW)
+    Set actionRange = Union(ws.Range("A" & QP_TASK_FIRST_ROW & ":B" & QP_TASK_LAST_ROW), ws.Range("M" & QP_TASK_FIRST_ROW & ":N" & QP_TASK_LAST_ROW))
     Set inputRange = ws.Range("C" & QP_TASK_FIRST_ROW & ":L" & QP_TASK_LAST_ROW)
 
     With headerRange
@@ -381,7 +382,7 @@ Public Sub SyncTaskEstimateActionButtons(ByVal ws As Worksheet)
     If syncStartRow > syncMaxRow Then syncStartRow = syncMaxRow
 
     For rowIndex = syncStartRow To syncMaxRow
-        For Each colIndex In Array(EST_SHEET_COL_ACTION_DECOMPOSE, EST_SHEET_COL_ACTION_DELETE, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+        For Each colIndex In Array(EST_SHEET_COL_ACTION_DECOMPOSE, EST_SHEET_COL_ACTION_DELETE, EST_SHEET_COL_ACTION_EXPRESS_EXPORT, EST_SHEET_COL_ACTION_COMMENT_OPTIONS)
             Set actionCell = ws.Cells(tbl.DataBodyRange.Row + rowIndex - 1, CLng(colIndex))
             shapeName = TaskEstimateActionShapeName(rowIndex, CLng(colIndex))
             If Trim$(CStr(actionCell.Value)) = "" Then
@@ -430,7 +431,7 @@ Public Sub MarkTaskEstimateRefreshForTarget(ByVal ws As Worksheet, ByVal Target 
     If tbl Is Nothing Then Exit Sub
     If tbl.DataBodyRange Is Nothing Then Exit Sub
 
-    Set affected = Intersect(Target, ws.Range("A" & QP_TASK_FIRST_ROW & ":M" & QP_TASK_LAST_ROW))
+    Set affected = Intersect(Target, ws.Range("A" & QP_TASK_FIRST_ROW & ":N" & QP_TASK_LAST_ROW))
     If affected Is Nothing Then Exit Sub
 
     firstRow = affected.Row - tbl.DataBodyRange.Row + 1
@@ -489,7 +490,8 @@ Public Sub RemoveStaleTaskEstimateActionButtons(ByVal ws As Worksheet, ByVal tbl
                 Or actionCell.Row > tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1 _
                 Or (actionCell.Column <> EST_SHEET_COL_ACTION_DECOMPOSE _
                     And actionCell.Column <> EST_SHEET_COL_ACTION_DELETE _
-                    And actionCell.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT) _
+                    And actionCell.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT _
+                    And actionCell.Column <> EST_SHEET_COL_ACTION_COMMENT_OPTIONS) _
                 Or Trim$(CStr(actionCell.Value)) = "" Then
                 shp.Delete
             End If
@@ -510,7 +512,7 @@ Public Sub AddTaskEstimateTableActionButtons(ByVal tbl As ListObject)
     If tbl.DataBodyRange Is Nothing Then Exit Sub
 
     For rowIndex = 1 To tbl.DataBodyRange.Rows.Count
-        For Each colIndex In Array(EST_SHEET_COL_ACTION_DECOMPOSE, EST_SHEET_COL_ACTION_DELETE, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+        For Each colIndex In Array(EST_SHEET_COL_ACTION_DECOMPOSE, EST_SHEET_COL_ACTION_DELETE, EST_SHEET_COL_ACTION_EXPRESS_EXPORT, EST_SHEET_COL_ACTION_COMMENT_OPTIONS)
             Set actionCell = tbl.Parent.Cells(tbl.DataBodyRange.Row + rowIndex - 1, CLng(colIndex))
             If Trim$(CStr(actionCell.Value)) <> "" Then
                 shapeName = TaskEstimateActionShapeName(rowIndex, CLng(colIndex))

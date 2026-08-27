@@ -339,7 +339,7 @@ async function assertPackageContracts(buildContract) {
   return { xlsxZip, xlsmZip };
 }
 
-async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, layout) {
+async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, sheet101Contract, layout) {
   const tables = await tableMap(xlsmZip);
   for (const [name, expectedValue] of Object.entries(sheet03Contract.tables)) {
     const expectedRef = resolveContractValue(expectedValue, layout);
@@ -385,6 +385,19 @@ async function assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, l
     throw new Error("sheet 04 conditional formatting is missing");
   }
   pass("sheet 04 status conditional formatting is present");
+
+  for (const [name, expectedValue] of Object.entries(sheet101Contract.tables)) {
+    const table = tables.get(name);
+    if (!table) throw new Error(`table ${name} not found`);
+    if (table.ref !== expectedValue) throw new Error(`table ${name} ref ${table.ref}, expected ${expectedValue}`);
+  }
+  const listTable = tables.get("tblTaskCommentArtifacts");
+  const listSheetXml = await zipText(xlsmZip, listTable.sheetPath);
+  for (const [cellRef, expectedValue] of Object.entries(sheet101Contract.requiredCells)) {
+    const actual = cellValue(listSheetXml, cellRef, sharedStrings);
+    if (actual !== expectedValue) throw new Error(`${cellRef} is ${JSON.stringify(actual)}, expected ${JSON.stringify(expectedValue)}`);
+  }
+  pass("sheet 101 list contracts");
 }
 
 async function executableFiles(relativePath) {
@@ -431,6 +444,13 @@ async function assertVbaContracts(vbaContract) {
   const duplicates = componentNames.filter((name, index) => componentNames.indexOf(name) !== index);
   if (duplicates.length) throw new Error(`duplicate VBA components: ${[...new Set(duplicates)].join(", ")}`);
   pass("VBA component manifest");
+
+  for (const component of components.filter(({ type }) => type === "form")) {
+    if (!component.source.endsWith(".frm")) throw new Error(`VBA form source must be .frm: ${component.source}`);
+    const companionPath = path.join(repoRoot, component.source.replace(/\.frm$/i, ".frx"));
+    await fs.access(companionPath);
+  }
+  pass("VBA form source companions");
 
   for (const macro of vbaContract.requiredPublicMacros) {
     const pattern = new RegExp(`\\bPublic\\s+Sub\\s+${macro}\\b`, "i");
@@ -490,8 +510,11 @@ async function assertWorkbookContract(workbookContract, xlsmZip) {
 try {
   const layout = deriveWorkbookLayout(await loadWorkbookLimits());
   const buildContract = await readJson("contracts/build.contract.json");
+  if (process.env.QUARTER_PLANNING_XLSX_OUTPUT) buildContract.outputs.xlsx = process.env.QUARTER_PLANNING_XLSX_OUTPUT;
+  if (process.env.QUARTER_PLANNING_XLSM_OUTPUT) buildContract.outputs.xlsm = process.env.QUARTER_PLANNING_XLSM_OUTPUT;
   const sheet03Contract = await readJson("contracts/sheet03.contract.json");
   const sheet04Contract = await readJson("contracts/sheet04.contract.json");
+  const sheet101Contract = await readJson("contracts/sheet101.contract.json");
   const vbaContract = await readJson("contracts/vba.contract.json");
   const workbookContract = await readJson("contracts/workbook.contract.json");
 
@@ -500,7 +523,7 @@ try {
   await assertDesignContracts(buildContract);
   await assertFilterButtonContracts(buildContract);
   await assertWorkbookContract(workbookContract, xlsmZip);
-  await assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, layout);
+  await assertSheetContracts(xlsmZip, sheet03Contract, sheet04Contract, sheet101Contract, layout);
   await assertVbaContracts(vbaContract);
   await assertSnapshot(
     workbookContract,

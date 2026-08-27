@@ -29,20 +29,21 @@ const ownerPattern = new RegExp(["Go", "guev"].join(""), "iu");
 const packageExtensions = new Set([".xlsx", ".xlsm", ".zip"]);
 const textExtensions = new Set([".csv", ".json", ".md", ".mjs", ".ps1", ".txt", ".yml", ".yaml", ".xml"]);
 
-function assertNoForbidden(text, context, includeOwner = false) {
-  for (const pattern of forbiddenPatterns) {
+function assertNoForbidden(text, context, includeOwner = false, allowedPatternIndexes = new Set()) {
+  for (const [index, pattern] of forbiddenPatterns.entries()) {
+    if (allowedPatternIndexes.has(index)) continue;
     if (pattern.test(text)) throw new Error(`Forbidden public data ${pattern} found in ${context}`);
   }
   if (includeOwner && ownerPattern.test(text)) throw new Error(`Demo owner name found in ${context}`);
 }
 
-async function scanPackage(filePath, includeOwner = true) {
+async function scanPackage(filePath, includeOwner = true, allowedPatternIndexes = new Set()) {
   const zip = await JSZip.loadAsync(await fs.readFile(filePath));
   for (const [entryName, entry] of Object.entries(zip.files)) {
     if (entry.dir) continue;
     const bytes = await entry.async("nodebuffer");
     const combined = `${bytes.toString("utf8")}\n${bytes.toString("latin1")}\n${bytes.toString("utf16le")}`;
-    assertNoForbidden(combined, `${filePath}:${entryName}`, includeOwner && entryName !== "xl/vbaProject.bin");
+    assertNoForbidden(combined, `${filePath}:${entryName}`, includeOwner && entryName !== "xl/vbaProject.bin", allowedPatternIndexes);
   }
 }
 
@@ -64,10 +65,19 @@ for (const relativePath of trackedFiles()) {
   }
   const extension = path.extname(relativePath).toLowerCase();
   if (packageExtensions.has(extension)) {
-    await scanPackage(fullPath, /^(?:assets|outputs)[\\/]/.test(relativePath));
+    const normalizedPath = relativePath.replaceAll("\\", "/");
+    const demoPackagePaths = new Set([
+      "assets/vba/quarter_planning_macro_template.xlsm",
+      "outputs/quarter_planning_step1.xlsx",
+      "outputs/quarter_planning_step2.xlsm",
+    ]);
+    const allowedPatternIndexes = demoPackagePaths.has(normalizedPath) ? new Set([4]) : new Set();
+    await scanPackage(fullPath, /^(?:assets|outputs)[\\/]/.test(relativePath), allowedPatternIndexes);
   } else if (textExtensions.has(extension)) {
     const includeOwner = /^(?:assets|data|outputs)[\\/]/.test(relativePath);
-    assertNoForbidden(await fs.readFile(fullPath, "utf8"), relativePath, includeOwner);
+    const normalizedPath = relativePath.replaceAll("\\", "/");
+    const allowedPatternIndexes = normalizedPath === "data/test_data_quarter_planning.json" ? new Set([4]) : new Set();
+    assertNoForbidden(await fs.readFile(fullPath, "utf8"), relativePath, includeOwner, allowedPatternIndexes);
   } else if (extension === ".bin") {
     const bytes = await fs.readFile(fullPath);
     assertNoForbidden(`${bytes.toString("latin1")}\n${bytes.toString("utf16le")}`, relativePath, false);
@@ -87,7 +97,8 @@ await workbook.xlsx.readFile(xlsxPath);
 const settings = workbook.getWorksheet("00_Настройки");
 const estimates = workbook.getWorksheet("03_Оценка задач");
 const plan = workbook.getWorksheet("04_Квартальный план");
-if (!settings || !estimates || !plan) throw new Error("Release workbook is missing required sheets");
+const lists = workbook.getWorksheet("101_Списки");
+if (!settings || !estimates || !plan || !lists) throw new Error("Release workbook is missing required sheets");
 for (const cell of ["B4", "B5", "B6", "B7"]) {
   const value = settings.getCell(cell).value;
   if (value !== null && value !== "") throw new Error(`Release setting ${cell} is not blank: ${value}`);
@@ -97,6 +108,19 @@ for (let row = layout.taskEstimates.dataStartRow; row <= layout.taskEstimates.da
     const value = estimates.getCell(row, column).value;
     if (value !== null && value !== "") throw new Error(`Release estimate cell ${estimates.getCell(row, column).address} is not blank`);
   }
+  const actionValue = estimates.getCell(row, 14).value;
+  if (actionValue !== null && actionValue !== "") throw new Error(`Release estimate action N${row} is not blank`);
+}
+
+const expectedReleaseArtifacts = ["Бизнес-требования", "Макеты интерфейсов", "Архитектурное решение", "Проверка ИБ"];
+const expectedReleaseAdjacentTeams = ["Команда Альфа", "Команда Бета", "Команда Гамма", "Команда Дельта", "Команда Эпсилон", "Команда Дзета", "Платформа 1", "Интеграции", "Поддержка"];
+const actualReleaseArtifacts = expectedReleaseArtifacts.map((_, index) => lists.getCell(index + 4, 1).text);
+const actualReleaseAdjacentTeams = expectedReleaseAdjacentTeams.map((_, index) => lists.getCell(index + 4, 3).text);
+if (JSON.stringify(actualReleaseArtifacts) !== JSON.stringify(expectedReleaseArtifacts)) {
+  throw new Error(`Release artifact options are ${JSON.stringify(actualReleaseArtifacts)}`);
+}
+if (JSON.stringify(actualReleaseAdjacentTeams) !== JSON.stringify(expectedReleaseAdjacentTeams)) {
+  throw new Error(`Release adjacent-team options are ${JSON.stringify(actualReleaseAdjacentTeams)}`);
 }
 for (let row = layout.backlog.dataStartRow; row <= layout.backlog.dataEndRow; row += 1) {
   const value = plan.getCell(row, 8).value;

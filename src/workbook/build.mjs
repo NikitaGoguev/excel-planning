@@ -10,6 +10,7 @@ import {
   SHEET_CAPACITY,
   SHEET_ESTIMATES,
   SHEET_EXPRESS_TEMPLATE,
+  SHEET_LISTS,
   SHEET_PLAN,
   SHEET_QUARTER,
   SHEET_REFS,
@@ -113,6 +114,7 @@ import { buildReferencesSheet } from "../sheets/references.mjs";
 import { buildCapacitySheet } from "../sheets/capacity.mjs";
 import { buildEstimatesSheet } from "../sheets/estimates.mjs";
 import { buildPlanSheet } from "../sheets/plan.mjs";
+import { buildListsSheet } from "../sheets/lists.mjs";
 
 const workbook = WorkbookAdapter.create();
 
@@ -145,6 +147,9 @@ buildPlanSheet({ ...sheetContext, plan, quarterPlanStatuses });
 
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 await appendWorksheetFromFile(workbook.raw, expressEstimateTemplatePath, SHEET_EXPRESS_TEMPLATE);
+const lists = workbook.worksheets.add(SHEET_LISTS);
+lists.showGridLines = false;
+buildListsSheet({ ...sheetContext, lists });
 await workbook.raw.xlsx.writeFile(outputPath);
 await allowBlankInDataValidations(outputPath);
 await applyHiddenFilterButtons(outputPath);

@@ -55,10 +55,16 @@ export function buildEstimatesSheet(context) {
         : ["", "", "", "", "", "", "", "", "", "", "", "", ""];
     }),
   ];
+  estimates.getRange(`N${layout.taskEstimates.headerRow}:N${layout.taskEstimates.dataEndRow}`).values = [
+    ["+"],
+    ...Array.from({ length: limits.taskRows }, (_, index) => [testData.taskEstimates?.[index] ? "+" : ""]),
+  ];
   applyHeader(estimates.getRange("A3:M3"));
+  applyHeader(estimates.getRange("N3"));
   applyAction(estimates.getRange(`A${layout.taskEstimates.dataStartRow}:B${layout.taskEstimates.dataEndRow}`));
   applyInput(estimates.getRange(`C${layout.taskEstimates.dataStartRow}:L${layout.taskEstimates.dataEndRow}`));
   applyAction(estimates.getRange(`M${layout.taskEstimates.dataStartRow}:M${layout.taskEstimates.dataEndRow}`));
+  applyAction(estimates.getRange(`N${layout.taskEstimates.dataStartRow}:N${layout.taskEstimates.dataEndRow}`));
   estimates.getRange(`C${layout.taskEstimates.dataStartRow}:C${layout.taskEstimates.dataEndRow}`).setNumberFormat("0");
   estimates.getRange(`H${layout.taskEstimates.dataStartRow}:K${layout.taskEstimates.dataEndRow}`).setNumberFormat("0.00");
   addWholeValidation(estimates.getRange(`C${layout.taskEstimates.dataStartRow}:C${layout.taskEstimates.dataEndRow}`), 1, 999);
@@ -79,5 +85,6 @@ export function buildEstimatesSheet(context) {
     K: 56,
     L: 519,
     M: 140,
+    N: 46,
   });
 }

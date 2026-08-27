@@ -192,6 +192,10 @@ Public Sub AssertTaskEstimateUnicodeTextForTest()
     QuarterPlanCommon.AssertTaskEstimateUnicodeTextForTest
 End Sub
 
+Public Sub AssertTaskEstimateCommentOptionsForTest()
+    QuarterPlanTaskEstimates.AssertTaskEstimateCommentOptionsForTest
+End Sub
+
 Public Sub AssertQuarterPlanBacklogDefaultExportFileNameForTest()
     QuarterPlanCommon.AssertQuarterPlanBacklogDefaultExportFileNameForTest
 End Sub

@@ -45,6 +45,7 @@ The workbook currently contains:
 - `03_Оценка задач`: task estimate input table `tblTaskEstimates`, with `>`/`x` decomposition actions in `A:B` and root express-estimate export actions in `M`; VBA maintains technical `_TaskId`, `_ParentTaskId`, `_Level` values outside the visible table.
 - `04_Квартальный план`: resource balance strip, active plan, grey zone, and backlog tables. Section capacities come from `config/workbook-limits.json`.
 - `100_Шаблон экспресс оценки`: visible sheet copied from `assets/Шаблон Экспресс оценки.xlsx`, placed after `99_Справочники`, and used as the formatted template for per-root express-estimate exports.
+- `101_Списки`: visible editable source tables `tblTaskCommentArtifacts` and `tblTaskCommentAdjacentTeams` used by the sheet 03 comment-options modal.
 - `99_Справочники`: expertise list `AN`, `BE`, `FE`, `QA`, waterfall/order rules, statuses, yes/no values, planning rule descriptions, and editable planning rule settings table `tblPlanningRuleSettings`.
 
 ## Important Design Decisions
@@ -124,6 +125,8 @@ On `03_Оценка задач`:
 
 - With the default config, sheet 03 has `100` data rows and `tblTaskEstimates` spans `C3:M103`; code must use resolved/generated limits rather than these default literals.
 - `M3` is `Экспорт`; `M4:M103` contains shape-backed per-root export actions. `Примечание` is restored as a visible user field in column `G`.
+- `N3` and root task rows in `N4:N103` contain the `+` comment-options action outside `tblTaskEstimates`; child, grandchild, and empty rows must not receive that action.
+- The `+` action opens managed UserForm `QuarterPlanTaskCommentForm`, reading current non-empty values from `tblTaskCommentArtifacts` and `tblTaskCommentAdjacentTeams`. OK appends selected values to `Комментарий` with `; ` and case-insensitive de-duplication; Cancel and window close leave the comment unchanged.
 - The top action layout is fixed: `A2:B2` = `Сбросить`, `C1` = `Экспорт`, `C2` = `Обновить`, `D1` = `Импорт`, `D2` = the dynamic `Импорт CSV (до <taskRows>)`, `E1` = title `Оценка задач`.
 - `H1:K1` contains the merged title `Статистика`; `H2:K2` contains formula-driven totals for `AN`, `BE`, `FE`, and `QA` from `tblTaskEstimates`.
 - `D1` is a shape-backed XLSX import button with caption `Импорт`. It imports files created by the sheet 03 `Экспорт` button and always appends after the last task/subtree.
@@ -221,7 +224,7 @@ Before finalizing workbook changes, verify:
 - the `.xlsx` exports successfully;
 - `.xlsx` has no `xl/vbaProject.bin`;
 - `.xlsm` has `xl/vbaProject.bin`, macro-enabled workbook content type, and `workbook.xml` contains `codeName="ThisWorkbook"`;
-- `.xlsm` worksheet XML files contain code names for all generated sheets, currently `Sheet1` through `Sheet7`;
+- `.xlsm` worksheet XML files contain code names for all generated sheets, currently `Sheet1` through `Sheet8`;
 - Excel COM can open the `.xlsm`, access `VBProject.VBComponents`, load sheet 03 into backlog, move one backlog task to active plan, and run recalculation;
 - the target sheet preview is readable;
 - formula error scan reports no matches.

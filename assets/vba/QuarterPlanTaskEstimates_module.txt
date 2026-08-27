@@ -13,13 +13,15 @@ Public Function IsTaskEstimateActionCell(ByVal ws As Worksheet, ByVal Target As 
     If Target.Row < tbl.DataBodyRange.Row Or Target.Row > tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1 Then Exit Function
     If Target.Column <> EST_SHEET_COL_ACTION_DECOMPOSE _
         And Target.Column <> EST_SHEET_COL_ACTION_DELETE _
-        And Target.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT Then Exit Function
+        And Target.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT _
+        And Target.Column <> EST_SHEET_COL_ACTION_COMMENT_OPTIONS Then Exit Function
     If Trim$(CStr(Target.Value)) = "" Then Exit Function
 
     actionCol = Target.Column
     IsTaskEstimateActionCell = (actionCol = EST_SHEET_COL_ACTION_DECOMPOSE _
         Or actionCol = EST_SHEET_COL_ACTION_DELETE _
-        Or actionCol = EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+        Or actionCol = EST_SHEET_COL_ACTION_EXPRESS_EXPORT _
+        Or actionCol = EST_SHEET_COL_ACTION_COMMENT_OPTIONS)
 
 SafeExit:
 End Function
@@ -37,7 +39,8 @@ Public Function HandleTaskEstimateAction(ByVal ws As Worksheet, ByVal Target As 
     If Target.Row < tbl.DataBodyRange.Row Or Target.Row > tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1 Then Err.Raise 9, , "Action cell is outside task estimate row range."
     If Target.Column <> EST_SHEET_COL_ACTION_DECOMPOSE _
         And Target.Column <> EST_SHEET_COL_ACTION_DELETE _
-        And Target.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT Then Err.Raise 5, , "Unsupported action column."
+        And Target.Column <> EST_SHEET_COL_ACTION_EXPRESS_EXPORT _
+        And Target.Column <> EST_SHEET_COL_ACTION_COMMENT_OPTIONS Then Err.Raise 5, , "Unsupported action column."
     If Trim$(CStr(Target.Value)) = "" Then Err.Raise 5, , "Task estimate action cell is empty."
 
     actionCol = Target.Column
@@ -50,6 +53,8 @@ Public Function HandleTaskEstimateAction(ByVal ws As Worksheet, ByVal Target As 
             DeleteTaskEstimateDecomposition tbl, rowIndex, TASK_DELETE_CHOICE_PROMPT
         Case EST_SHEET_COL_ACTION_EXPRESS_EXPORT
             ExportTaskEstimateExpressWithPrompt tbl, rowIndex
+        Case EST_SHEET_COL_ACTION_COMMENT_OPTIONS
+            ShowTaskEstimateCommentOptions tbl, rowIndex
         Case Else
             Err.Raise 5, , "Unsupported task estimate action."
     End Select
@@ -103,11 +108,13 @@ Public Sub RefreshTaskEstimateTable(ByVal tbl As ListObject)
     Set actionRange = tbl.Parent.Range(tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshStartRow - 1, EST_SHEET_COL_ACTION_DECOMPOSE), tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshMaxRow - 1, EST_SHEET_COL_ACTION_DELETE))
     actionRange.Hyperlinks.Delete
     tbl.Parent.Range(tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshStartRow - 1, EST_SHEET_COL_ACTION_EXPRESS_EXPORT), tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshMaxRow - 1, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)).Hyperlinks.Delete
+    tbl.Parent.Range(tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshStartRow - 1, EST_SHEET_COL_ACTION_COMMENT_OPTIONS), tbl.Parent.Cells(tbl.DataBodyRange.Row + refreshMaxRow - 1, EST_SHEET_COL_ACTION_COMMENT_OPTIONS)).Hyperlinks.Delete
 
     For rowIndex = refreshStartRow To refreshMaxRow
         TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE).ClearContents
         TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE).ClearContents
         TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_EXPRESS_EXPORT).ClearContents
+        TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_COMMENT_OPTIONS).ClearContents
 
         If TaskEstimateRowHasTask(tbl, rowIndex) Then
             taskId = EnsureTaskEstimateRowId(tbl, rowIndex)
@@ -124,6 +131,7 @@ Public Sub RefreshTaskEstimateTable(ByVal tbl As ListObject)
             End If
             If taskLevel = 0 Then
                 TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_EXPRESS_EXPORT).Value = TaskEstimateTextExpressExport()
+                TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_COMMENT_OPTIONS).Value = "+"
             End If
             If hasChildren Then
                 WriteTaskEstimateParentFormulas tbl, rowIndex
@@ -138,6 +146,7 @@ Public Sub RefreshTaskEstimateTable(ByVal tbl As ListObject)
         AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE)
         AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE)
         AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_EXPRESS_EXPORT)
+        AddTaskEstimateActionLink TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_COMMENT_OPTIONS)
     Next rowIndex
     Exit Sub
 
@@ -579,6 +588,7 @@ Public Sub ClearTaskEstimateRow(ByVal tbl As ListObject, ByVal rowIndex As Long)
 
     TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DECOMPOSE).ClearContents
     TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_DELETE).ClearContents
+    TaskEstimateSheetCell(tbl, rowIndex, EST_SHEET_COL_ACTION_COMMENT_OPTIONS).ClearContents
     For col = EST_COL_PRIORITY To EST_COL_LAST
         tbl.DataBodyRange.Cells(rowIndex, col).ClearContents
     Next col
@@ -733,6 +743,185 @@ Public Function EffectiveTaskEstimateValue(ByVal tbl As ListObject, ByVal rowInd
         EffectiveTaskEstimateValue = NzDouble(tbl.DataBodyRange.Cells(rowIndex, estimateCol).Value)
     End If
 End Function
+
+Public Sub ShowTaskEstimateCommentOptions(ByVal tbl As ListObject, ByVal rowIndex As Long)
+    On Error GoTo Fail
+
+    Dim seenValues As New Collection
+    Dim artifactOptions As Collection
+    Dim adjacentOptions As Collection
+    Dim dialog As QuarterPlanTaskCommentForm
+    Dim selectedValues As Collection
+    Dim errorNumber As Long
+    Dim errorDescription As String
+
+    If tbl Is Nothing Then Err.Raise 9, , "tblTaskEstimates is not available."
+    If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Err.Raise 9, , "Task estimate row is outside the table."
+    If TaskEstimateRowLevel(tbl, rowIndex) <> 0 Then Err.Raise 5, , "Comment options are available only for root tasks."
+
+    Set artifactOptions = ReadTaskEstimateCommentOptions("tblTaskCommentArtifacts", seenValues)
+    Set adjacentOptions = ReadTaskEstimateCommentOptions("tblTaskCommentAdjacentTeams", seenValues)
+    If artifactOptions.Count + adjacentOptions.Count = 0 Then
+        MsgBox TaskEstimateTextNoCommentOptions(), vbInformation, TaskEstimateTextCommentOptionsTitle()
+        Exit Sub
+    End If
+
+    Set dialog = New QuarterPlanTaskCommentForm
+    dialog.InitializeOptions TaskEstimateCommentOptionsCaption("tblTaskCommentArtifacts"), artifactOptions, _
+        TaskEstimateCommentOptionsCaption("tblTaskCommentAdjacentTeams"), adjacentOptions
+    dialog.Show vbModal
+    If dialog.Accepted Then
+        Set selectedValues = dialog.SelectedValues()
+        AppendTaskEstimateCommentSelections tbl.DataBodyRange.Cells(rowIndex, EST_COL_COMMENT), selectedValues
+    End If
+    Unload dialog
+    Exit Sub
+
+Fail:
+    errorNumber = Err.Number
+    errorDescription = Err.Description
+    On Error Resume Next
+    If Not dialog Is Nothing Then Unload dialog
+    On Error GoTo 0
+    Err.Raise errorNumber, "ShowTaskEstimateCommentOptions", errorDescription
+End Sub
+
+Public Function ReadTaskEstimateCommentOptions(ByVal tableName As String, ByVal seenValues As Collection) As Collection
+    Dim result As New Collection
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim cell As Range
+    Dim optionText As String
+
+    Set ws = FindWorksheetByTableName(tableName)
+    If ws Is Nothing Then Err.Raise 9, , "Comment options table was not found: " & tableName
+    Set tbl = ws.ListObjects(tableName)
+    If Not tbl.DataBodyRange Is Nothing Then
+        For Each cell In tbl.DataBodyRange.Cells
+            optionText = Trim$(CStr(cell.Value))
+            If optionText <> "" Then
+                If Not TaskEstimateValueInCollection(optionText, seenValues) Then
+                    result.Add optionText
+                    seenValues.Add optionText
+                End If
+            End If
+        Next cell
+    End If
+    Set ReadTaskEstimateCommentOptions = result
+End Function
+
+Public Function TaskEstimateCommentOptionsCaption(ByVal tableName As String) As String
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+
+    Set ws = FindWorksheetByTableName(tableName)
+    If ws Is Nothing Then Err.Raise 9, , "Comment options table was not found: " & tableName
+    Set tbl = ws.ListObjects(tableName)
+    TaskEstimateCommentOptionsCaption = Trim$(CStr(tbl.HeaderRowRange.Cells(1, 1).Value))
+End Function
+
+Public Function TaskEstimateValueInCollection(ByVal candidate As String, ByVal values As Collection) As Boolean
+    Dim item As Variant
+
+    For Each item In values
+        If StrComp(Trim$(CStr(item)), Trim$(candidate), vbTextCompare) = 0 Then
+            TaskEstimateValueInCollection = True
+            Exit Function
+        End If
+    Next item
+End Function
+
+Public Sub AppendTaskEstimateCommentSelections(ByVal targetCell As Range, ByVal selectedValues As Collection)
+    Dim existingText As String
+    Dim optionValue As Variant
+    Dim optionText As String
+
+    If targetCell Is Nothing Then Err.Raise 91, , "Comment target cell is not available."
+    If selectedValues Is Nothing Then Exit Sub
+
+    existingText = Trim$(CStr(targetCell.Value))
+    For Each optionValue In selectedValues
+        optionText = Trim$(CStr(optionValue))
+        If optionText <> "" Then
+            If Not TaskEstimateDelimitedValueExists(existingText, optionText) Then
+                If existingText <> "" Then existingText = existingText & "; "
+                existingText = existingText & optionText
+            End If
+        End If
+    Next optionValue
+    If existingText <> Trim$(CStr(targetCell.Value)) Then targetCell.Value = existingText
+End Sub
+
+Public Function TaskEstimateDelimitedValueExists(ByVal existingText As String, ByVal candidate As String) As Boolean
+    Dim token As Variant
+
+    For Each token In Split(existingText, ";")
+        If StrComp(Trim$(CStr(token)), Trim$(candidate), vbTextCompare) = 0 Then
+            TaskEstimateDelimitedValueExists = True
+            Exit Function
+        End If
+    Next token
+End Function
+
+Public Sub AssertTaskEstimateCommentOptionsForTest()
+    On Error GoTo Fail
+
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim commentCell As Range
+    Dim originalComment As Variant
+    Dim seenValues As New Collection
+    Dim artifactOptions As Collection
+    Dim adjacentOptions As Collection
+    Dim dialog As QuarterPlanTaskCommentForm
+    Dim selectedValues As Collection
+    Dim errorNumber As Long
+    Dim errorDescription As String
+
+    Set ws = GetTaskEstimatesWorksheet()
+    If ws Is Nothing Then Err.Raise 9, , "Task estimates worksheet not found."
+    Set tbl = ws.ListObjects("tblTaskEstimates")
+    Set commentCell = tbl.DataBodyRange.Cells(1, EST_COL_COMMENT)
+    originalComment = commentCell.Value
+
+    Set artifactOptions = ReadTaskEstimateCommentOptions("tblTaskCommentArtifacts", seenValues)
+    Set adjacentOptions = ReadTaskEstimateCommentOptions("tblTaskCommentAdjacentTeams", seenValues)
+    If artifactOptions.Count <> 4 Then Err.Raise 5, , "Expected 4 artifact options, found " & CStr(artifactOptions.Count)
+    If adjacentOptions.Count <> 9 Then Err.Raise 5, , "Expected 9 adjacent-team options, found " & CStr(adjacentOptions.Count)
+
+    Set dialog = New QuarterPlanTaskCommentForm
+    dialog.InitializeOptions TaskEstimateCommentOptionsCaption("tblTaskCommentArtifacts"), artifactOptions, _
+        TaskEstimateCommentOptionsCaption("tblTaskCommentAdjacentTeams"), adjacentOptions
+    If dialog.Accepted Then Err.Raise 5, , "Comment options dialog must start in cancelled state."
+    If dialog.ArtifactOptionCount <> 4 Or dialog.AdjacentOptionCount <> 9 Then Err.Raise 5, , "Comment options dialog group counts are invalid."
+    dialog.SelectOptionForTest CStr(artifactOptions.Item(1))
+    dialog.SelectOptionForTest CStr(adjacentOptions.Item(1))
+    dialog.AcceptForTest
+    Set selectedValues = dialog.SelectedValues()
+
+    commentCell.Value = "root comment"
+    AppendTaskEstimateCommentSelections commentCell, selectedValues
+    If CStr(commentCell.Value) <> "root comment; " & CStr(artifactOptions.Item(1)) & "; " & CStr(adjacentOptions.Item(1)) Then _
+        Err.Raise 5, , "Comment selections were not appended in expected order: " & CStr(commentCell.Value)
+    AppendTaskEstimateCommentSelections commentCell, selectedValues
+    If CStr(commentCell.Value) <> "root comment; " & CStr(artifactOptions.Item(1)) & "; " & CStr(adjacentOptions.Item(1)) Then _
+        Err.Raise 5, , "Duplicate comment selections were appended: " & CStr(commentCell.Value)
+
+    dialog.CancelForTest
+    If dialog.Accepted Then Err.Raise 5, , "Comment options dialog cancel state is invalid."
+    commentCell.Value = originalComment
+    Unload dialog
+    Exit Sub
+
+Fail:
+    errorNumber = Err.Number
+    errorDescription = Err.Description
+    On Error Resume Next
+    If Not commentCell Is Nothing Then commentCell.Value = originalComment
+    If Not dialog Is Nothing Then Unload dialog
+    On Error GoTo 0
+    Err.Raise errorNumber, "AssertTaskEstimateCommentOptionsForTest", errorDescription
+End Sub
 
 Public Sub WriteEstimateNumber(ByVal targetCell As Range, ByVal value As Double)
     If value = 0 Then

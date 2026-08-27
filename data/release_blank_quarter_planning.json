@@ -17,5 +17,9 @@
     { "role": "Тестировщик", "count": 0, "comment": "" }
   ],
   "capacity": { "coreTeamFocusFactor": 0.7, "teamLeadFocusFactor": 0.5, "analysisLeadFocusFactor": 0.5 },
+  "taskCommentOptions": {
+    "artifacts": ["Бизнес-требования", "Макеты интерфейсов", "Архитектурное решение", "Проверка ИБ"],
+    "adjacentTeams": ["Команда Альфа", "Команда Бета", "Команда Гамма", "Команда Дельта", "Команда Эпсилон", "Команда Дзета", "Платформа 1", "Интеграции", "Поддержка"]
+  },
   "taskEstimates": []
 }

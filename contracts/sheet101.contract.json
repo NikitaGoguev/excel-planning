@@ -1,0 +1,11 @@
+{
+  "tables": {
+    "tblTaskCommentArtifacts": "A3:A7",
+    "tblTaskCommentAdjacentTeams": "C3:C12"
+  },
+  "requiredCells": {
+    "A1": "Списки",
+    "A3": "Артефакты",
+    "C3": "Смежники"
+  }
+}

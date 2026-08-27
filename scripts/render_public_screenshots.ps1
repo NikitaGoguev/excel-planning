@@ -66,7 +66,7 @@ try {
     $excel.CalculateFull()
 
     Export-RangePng $workbook.Worksheets.Item("00_Настройки") "A1:L34" "settings.png"
-    Export-RangePng $workbook.Worksheets.Item("03_Оценка задач") "A1:M14" "estimates.png"
+    Export-RangePng $workbook.Worksheets.Item("03_Оценка задач") "A1:N14" "estimates.png"
     Export-RangePng $workbook.Worksheets.Item("04_Квартальный план") "A1:S16" "plan.png"
 } finally {
     if ($workbook -ne $null) {

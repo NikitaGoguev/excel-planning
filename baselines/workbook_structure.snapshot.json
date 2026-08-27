@@ -5,7 +5,8 @@
     "tblTaskEstimates:C1": "Экспорт",
     "tblTaskEstimates:D1": "Импорт",
     "tblTaskEstimates:D2": "Импорт CSV (до 100)",
-    "tblTaskEstimates:M3": "Экспорт"
+    "tblTaskEstimates:M3": "Экспорт",
+    "tblTaskEstimates:N3": "+"
   },
   "tables": {
     "tblExpertise": "A3:C7",
@@ -15,6 +16,8 @@
     "tblPlanGrey": "A30:S50",
     "tblPlanningRuleSettings": "A29:E35",
     "tblStatuses": "E3:E10",
+    "tblTaskCommentAdjacentTeams": "C3:C12",
+    "tblTaskCommentArtifacts": "A3:A7",
     "tblTaskEstimates": "C3:M103",
     "tblTeamComposition": "A13:B19",
     "tblTeamMembers": "A23:L43",
@@ -50,7 +53,8 @@
       "Sheet4",
       "Sheet5",
       "Sheet6",
-      "Sheet7"
+      "Sheet7",
+      "Sheet8"
     ]
   }
 }

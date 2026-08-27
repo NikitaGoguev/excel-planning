@@ -36,6 +36,10 @@ if ($components.Count -eq 0) { throw "VBA component manifest is empty" }
 foreach ($item in $components) {
     $item | Add-Member -NotePropertyName FullSourcePath -NotePropertyValue (Resolve-ProjectPath ([string]$item.source))
     if (!(Test-Path -LiteralPath $item.FullSourcePath)) { throw "VBA source not found: $($item.FullSourcePath)" }
+    if ($item.type -eq "form") {
+        $formBinaryPath = [System.IO.Path]::ChangeExtension($item.FullSourcePath, ".frx")
+        if (!(Test-Path -LiteralPath $formBinaryPath)) { throw "VBA form binary companion not found: $formBinaryPath" }
+    }
 }
 
 $securityKey = "HKCU:\Software\Microsoft\Office\16.0\Excel\Security"
@@ -71,6 +75,12 @@ try {
     foreach ($item in $components) {
         $component = $null
         try { $component = $workbook.VBProject.VBComponents.Item([string]$item.name) } catch {}
+        if ($item.type -eq "form") {
+            if ($component -ne $null) { $workbook.VBProject.VBComponents.Remove($component) }
+            $component = $workbook.VBProject.VBComponents.Import($item.FullSourcePath)
+            if ([string]$component.Name -ne [string]$item.name) { $component.Name = [string]$item.name }
+            continue
+        }
         if ($null -eq $component) {
             if ($item.type -ne "standard") { throw "Document VBA component not found: $($item.name)" }
             $component = $workbook.VBProject.VBComponents.Add(1)

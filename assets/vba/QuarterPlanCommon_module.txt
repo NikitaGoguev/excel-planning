@@ -63,6 +63,7 @@ Public Const PLAN_TECH_LAST_COL_LETTER As String = "AF"
 Public Const EST_SHEET_COL_ACTION_DECOMPOSE As Long = 1
 Public Const EST_SHEET_COL_ACTION_DELETE As Long = 2
 Public Const EST_SHEET_COL_ACTION_EXPRESS_EXPORT As Long = 13
+Public Const EST_SHEET_COL_ACTION_COMMENT_OPTIONS As Long = 14
 Public Const EST_SHEET_COL_TASK_ID As Long = 28
 Public Const EST_SHEET_COL_PARENT_TASK_ID As Long = 29
 Public Const EST_SHEET_COL_LEVEL As Long = 30
@@ -423,6 +424,22 @@ End Function
 
 Public Function TaskEstimateTextErrorPrefix() As String
     TaskEstimateTextErrorPrefix = TextFromCodes(1054, 1096, 1080, 1073, 1082, 1072, 32)
+End Function
+
+Public Function TaskEstimateTextCommentOptionsTitle() As String
+    TaskEstimateTextCommentOptionsTitle = TextFromCodes(1044, 1086, 1073, 1072, 1074, 1080, 1090, 1100, 32, 1074, 32, 1082, 1086, 1084, 1084, 1077, 1085, 1090, 1072, 1088, 1080, 1081)
+End Function
+
+Public Function TaskEstimateTextOk() As String
+    TaskEstimateTextOk = TextFromCodes(1054, 1050)
+End Function
+
+Public Function TaskEstimateTextCancel() As String
+    TaskEstimateTextCancel = TextFromCodes(1054, 1090, 1084, 1077, 1085, 1072)
+End Function
+
+Public Function TaskEstimateTextNoCommentOptions() As String
+    TaskEstimateTextNoCommentOptions = TextFromCodes(1053, 1077, 1090, 32, 1076, 1086, 1089, 1090, 1091, 1087, 1085, 1099, 1093, 32, 1074, 1072, 1088, 1080, 1072, 1085, 1090, 1086, 1074, 32, 1076, 1083, 1103, 32, 1076, 1086, 1073, 1072, 1074, 1083, 1077, 1085, 1080, 1103, 32, 1074, 32, 1082, 1086, 1084, 1084, 1077, 1085, 1090, 1072, 1088, 1080, 1081, 46)
 End Function
 
 Public Function TextFromCodes(ParamArray codepoints() As Variant) As String

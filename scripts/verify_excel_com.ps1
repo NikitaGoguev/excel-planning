@@ -187,6 +187,12 @@ try {
     $null = $components.Count
     Write-Pass "VBProject is readable"
 
+    $commentFormComponent = $components.Item("QuarterPlanTaskCommentForm")
+    if ([int]$commentFormComponent.Type -ne 3) {
+        throw "QuarterPlanTaskCommentForm component type is $([int]$commentFormComponent.Type), expected 3"
+    }
+    Write-Pass "task comment UserForm component"
+
     $schedulerComponent = $components.Item([string]$schedulerContract.component)
     $schedulerModule = $schedulerComponent.CodeModule
     $embeddedSchedulerSource = $schedulerModule.Lines(1, $schedulerModule.CountOfLines)
@@ -222,6 +228,7 @@ try {
     $settingsSheet = $null
     $quarterSheet = $null
     $capacitySheet = $workbook.Worksheets.Item("02_Capacity")
+    $listsSheet = $workbook.Worksheets.Item("101_Списки")
     foreach ($sheet in @($workbook.Worksheets)) {
         foreach ($table in @($sheet.ListObjects)) {
             if ($table.Name -eq "tblPlanBacklog") { $planSheet = $sheet }
@@ -270,6 +277,18 @@ try {
     }
     Assert-NumberClose ([double]$planSheet.Rows.Item([int]$workbookLayout.backlog.dataStartRow + 2).RowHeight) ([double]$planSheet.StandardHeight) "Sheet 04 backlog row height" 0.1
     Write-Pass "COM table ranges"
+
+    $artifactOptionsTable = $listsSheet.ListObjects("tblTaskCommentArtifacts")
+    $adjacentOptionsTable = $listsSheet.ListObjects("tblTaskCommentAdjacentTeams")
+    $expectedArtifactOptions = @("БТ", "Макеты", "ОТАР", "ПСИ ИБ")
+    $expectedAdjacentOptions = @("Echo", "Sierra", "Bravo", ("Fox" + "trot"), "Uniform", "India", "Ф1", "ЕСК", "Тесса")
+    for ($index = 1; $index -le $expectedArtifactOptions.Count; $index++) {
+        Assert-TextEquals ([string]$artifactOptionsTable.DataBodyRange.Cells($index, 1).Text) ([string]$expectedArtifactOptions[$index - 1]) "Artifact option $index"
+    }
+    for ($index = 1; $index -le $expectedAdjacentOptions.Count; $index++) {
+        Assert-TextEquals ([string]$adjacentOptionsTable.DataBodyRange.Cells($index, 1).Text) ([string]$expectedAdjacentOptions[$index - 1]) "Adjacent-team option $index"
+    }
+    Write-Pass "COM sheet 101 comment options"
 
     Assert-TextEquals ([string]$capacitySheet.Range("F6").Text) "Авто 00" "Capacity auto header"
     Assert-TextEquals ([string]$capacitySheet.Range("G6").Text) "Переопределение" "Capacity override header"
@@ -429,6 +448,7 @@ try {
         "btnTaskImportCsv" = "RunTaskEstimateImportCsv"
         "tea_01_1" = "RunTaskEstimateCellAction"
         "tea_01_13" = "RunTaskEstimateExpressExport"
+        "tea_01_14" = "RunTaskEstimateCellAction"
     }
     foreach ($shapeName in $expectedTaskActions.Keys) {
         $shape = $estimateSheet.Shapes.Item($shapeName)
@@ -447,6 +467,7 @@ try {
         "btnTaskImportCsv" = "Импорт CSV (до $($workbookLayout.limits.taskRows))"
         "tea_01_1" = ">"
         "tea_01_13" = "Экспорт"
+        "tea_01_14" = "+"
     }
     foreach ($shapeName in $expectedTaskCaptions.Keys) {
         $shape = $estimateSheet.Shapes.Item($shapeName)
@@ -456,11 +477,23 @@ try {
     }
     Write-Pass "COM sheet 03 Unicode-safe rebuild and action buttons"
 
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertTaskEstimateCommentOptionsForTest")
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 10).Text) "root comment" "Comment options test restores root comment"
+    Write-Pass "COM sheet 03 comment-options form and append behavior"
+
     $taskShapeMacro = "'" + $workbook.Name + "'!ThisWorkbook.HandleTaskEstimateShapeAction"
     $excel.Run($taskShapeMacro, "tea_01_1")
     Assert-TextEquals ([string]$estimateSheet.Range("B4").Text) "x" "Parent delete action after decomposition"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 3).Text) $taskExpectedDescription "Child task description after decomposition"
     Assert-TextEquals ([string]$estimateSheet.Range("B5").Text) "x" "Child delete action after decomposition"
+    Assert-TextEquals ([string]$estimateSheet.Range("N4").Text) "+" "Root comment-options action after decomposition"
+    Assert-TextEquals ([string]$estimateSheet.Range("N5").Text) "" "Child has no comment-options action"
+    try {
+        $null = $estimateSheet.Shapes.Item("tea_02_14")
+        throw "Child comment-options shape tea_02_14 exists unexpectedly"
+    } catch {
+        if ($_.Exception.Message -eq "Child comment-options shape tea_02_14 exists unexpectedly") { throw }
+    }
     Write-Pass "COM sheet 03 decompose action"
 
     $excel.Run("RunTaskEstimateExportXlsxPath", $taskExportPath)

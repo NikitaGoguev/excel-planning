@@ -93,6 +93,7 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - On workbook open, `03_Оценка задач` refreshes decomposition action cells. Shape buttons over populated action cells are recreated on sheet activation and by `RunTaskEstimateRepairActionButtons`, using the same shape-backed public-macro pattern as `04_Квартальный план`; this avoids Excel activation crashes from pre-created shapes on sheet 03.
 - The sheet 03 template row count and CSV caption derive from `taskRows`; changing the config requires rebuild, Excel VBA sync and COM verification.
 - `03_Оценка задач!M3` is `Экспорт`; `M4:M103` contains shape-backed per-root express-estimate export actions. `Примечание` is a visible user field in column `G`.
+- `03_Оценка задач!N3` is `+`; populated root rows in `N4:N103` use shape-backed comment-option actions outside `tblTaskEstimates`. Options come from editable tables on visible sheet `101_Списки`, and OK appends unique selections to `Комментарий` using `; `.
 - The top action layout on sheet 03 is fixed, but `D2` uses dynamic caption `Импорт CSV (до <taskRows>)`.
 - `03_Оценка задач!H1:K1` is a merged `Статистика` title block; `H2:K2` must contain formula-driven totals for `AN`, `BE`, `FE`, and `QA` based on `tblTaskEstimates`.
 - `03_Оценка задач!D1` is a shape-backed XLSX import button with caption `Импорт`. It imports files created by the sheet 03 `Экспорт` button, restores hierarchy from description indentation, and always appends after the last task/subtree.
@@ -118,6 +119,7 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - Row action shapes should call `RunQuarterPlanCellAction`; the handler should resolve the clicked shape through `Application.Caller` and then use `TopLeftCell` for the action cell.
 - Row action shape names must stay short, e.g. `qpa_b_01_1`. Excel on Windows and Mac can truncate long `Application.Caller` shape names, which breaks lookup by name.
 - Task estimate action shape names must stay short, e.g. `tea_01_1`.
+- Managed VBA UserForms are stored as `.frm/.frx` source pairs in `assets/vba`, listed with type `form` in `contracts/vba.contract.json`, and imported through Excel COM during `npm run sync:vba`; never patch their binary streams directly.
 - `RunQuarterPlanRepairActionButtons` is the manual repair macro for the action UI; keep it available when changing the button pipeline.
 - `RunTaskEstimateRepairActionButtons` is the manual repair macro for sheet 03 decomposition action cells and shape buttons.
 - Sheet 03 row add/delete performance depends on the optimized refresh path: mark the earliest dirty decomposition row, refresh only that range through the used estimate rows plus one spare row, and synchronize only missing/blank shape buttons. Do not touch properties on existing buttons or return normal actions to full delete/recreate of all shape buttons; reserve full rebuild for repair flows.

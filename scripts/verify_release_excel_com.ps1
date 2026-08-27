@@ -15,6 +15,24 @@ function Assert-Blank($Cell, [string]$Context) {
     if (![string]::IsNullOrWhiteSpace([string]$Cell.Text)) { throw "$Context is '$($Cell.Text)', expected blank" }
 }
 
+function Assert-Text($Cell, [string]$Expected, [string]$Context) {
+    if ([string]$Cell.Text -cne $Expected) { throw "$Context is '$($Cell.Text)', expected '$Expected'" }
+}
+
+function Assert-ReleaseCommentOptions($Workbook, [string]$Context) {
+    $lists = $Workbook.Worksheets.Item("101_Списки")
+    $artifacts = $lists.ListObjects("tblTaskCommentArtifacts")
+    $adjacent = $lists.ListObjects("tblTaskCommentAdjacentTeams")
+    $expectedArtifacts = @("Бизнес-требования", "Макеты интерфейсов", "Архитектурное решение", "Проверка ИБ")
+    $expectedAdjacent = @("Команда Альфа", "Команда Бета", "Команда Гамма", "Команда Дельта", "Команда Эпсилон", "Команда Дзета", "Платформа 1", "Интеграции", "Поддержка")
+    for ($index = 1; $index -le $expectedArtifacts.Count; $index++) {
+        Assert-Text $artifacts.DataBodyRange.Cells($index, 1) ([string]$expectedArtifacts[$index - 1]) "$Context artifact option $index"
+    }
+    for ($index = 1; $index -le $expectedAdjacent.Count; $index++) {
+        Assert-Text $adjacent.DataBodyRange.Cells($index, 1) ([string]$expectedAdjacent[$index - 1]) "$Context adjacent option $index"
+    }
+}
+
 function Assert-NoFormulaErrors($Workbook, [string]$Context) {
     foreach ($sheet in @($Workbook.Worksheets)) {
         $errorCells = $null
@@ -54,6 +72,7 @@ try {
     Assert-Blank $settings.Range("B4") "XLSX team"
     Assert-Blank $settings.Range("B5") "XLSX project lead"
     Assert-Blank $estimates.DataBodyRange.Cells(1, 3) "XLSX first task description"
+    Assert-ReleaseCommentOptions $workbook "XLSX"
     Assert-NoFormulaErrors $workbook "XLSX"
     $workbook.Close($false)
     [System.Runtime.InteropServices.Marshal]::ReleaseComObject($workbook) | Out-Null
@@ -67,6 +86,7 @@ try {
         $component = $components.Item($componentName)
         if ($component.CodeModule.CountOfLines -le 0) { throw "Release XLSM component $componentName has no code" }
     }
+    if ([int]$components.Item("QuarterPlanTaskCommentForm").Type -ne 3) { throw "Release XLSM task comment UserForm is missing" }
     $settings = $workbook.Worksheets.Item("00_Настройки")
     $estimateSheet = $workbook.Worksheets.Item("03_Оценка задач")
     $planSheet = $workbook.Worksheets.Item("04_Квартальный план")
@@ -74,6 +94,7 @@ try {
     Assert-Blank $settings.Range("B5") "XLSM project lead"
     Assert-Blank $estimateSheet.ListObjects("tblTaskEstimates").DataBodyRange.Cells(1, 3) "XLSM first task description"
     Assert-Blank $planSheet.ListObjects("tblPlanBacklog").DataBodyRange.Cells(1, 8) "XLSM first backlog description"
+    Assert-ReleaseCommentOptions $workbook "XLSM"
     $excel.Run("RunTaskEstimateRepairActionButtons")
     $excel.Run("RunQuarterPlanRepairActionButtons")
     foreach ($shapeName in @("btnTaskClearAll", "btnTaskRefresh", "btnTaskExportXlsx", "btnTaskImportXlsx", "btnTaskImportCsv")) {

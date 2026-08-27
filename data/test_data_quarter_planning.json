@@ -33,6 +33,10 @@
     "frontendPersonDays": 86, "frontendPersonHours": 688, "qaPersonDays": 130, "qaPersonHours": 1040,
     "totalPersonDays": 450, "totalPersonHours": 3600
   },
+  "taskCommentOptions": {
+    "artifacts": ["БТ", "Макеты", "ОТАР", "ПСИ ИБ"],
+    "adjacentTeams": ["Echo", "Sierra", "Bravo", "Foxtrot", "Uniform", "India", "Ф1", "ЕСК", "Тесса"]
+  },
   "taskEstimates": [
     { "priority": 10, "direction": "Личный кабинет", "description": "Единый вход для пользователей", "ticket": "PLAN-1001", "note": "Демо", "AN": 3, "BE": 5, "FE": 5, "QA": 4, "comment": "" },
     { "priority": 20, "direction": "Уведомления", "description": "Настройка email-уведомлений", "ticket": "PLAN-1002", "note": "", "AN": 4, "BE": 6, "FE": 3, "QA": 4, "comment": "" },
