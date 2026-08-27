@@ -96,6 +96,10 @@
       "pattern": "TaskEstimateImportCaption\\s*=\\s*\""
     },
     {
+      "name": "Raw Cyrillic sheet 03 CSV direction header literal",
+      "pattern": "TaskEstimateCsvHeaderDirection\\s*=\\s*\""
+    },
+    {
       "name": "Raw Cyrillic sheet 03 restored header or statistics literal",
       "pattern": "\"(?:Приоритет|Направление|Описание|ЗНИ/Jira|Примечание|Комментарий|Статистика)\""
     },

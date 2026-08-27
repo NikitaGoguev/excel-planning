@@ -97,7 +97,7 @@ Use this skill for repo tasks that change workbook generation, VBA automation, `
 - The top action layout on sheet 03 is fixed, but `D2` uses dynamic caption `Импорт CSV (до <taskRows>)`.
 - `03_Оценка задач!H1:K1` is a merged `Статистика` title block; `H2:K2` must contain formula-driven totals for `AN`, `BE`, `FE`, and `QA` based on `tblTaskEstimates`.
 - `03_Оценка задач!D1` is a shape-backed XLSX import button with caption `Импорт`. It imports files created by the sheet 03 `Экспорт` button, restores hierarchy from description indentation, and always appends after the last task/subtree.
-- `03_Оценка задач!D2` is a shape-backed CSV import button whose limit comes from `taskRows`. It imports UTF-8 comma-delimited CSV files by headers only; use `assets/import1.csv` for checks.
+- `03_Оценка задач!D2` is a shape-backed CSV import button whose limit comes from `taskRows`. It imports UTF-8 comma-delimited CSV files by headers only; required `Ключ запроса` and `Тема` map to `ЗНИ/Jira` and `Описание`, while optional `Пользовательское поле (Тип Темы (ЭПИКА))` maps to `Направление`. Missing optional direction headers leave `Направление` blank. Use `assets/import1.csv` for checks.
 - `03_Оценка задач!A2:B2` is a shape-backed `Сбросить` button that confirms before clearing the task estimate table, action cells, and technical decomposition fields.
 - `03_Оценка задач!A2:B2` and `C2` must restore the configured task range if worksheet rows were manually deleted.
 - `03_Оценка задач!C2` is a shape-backed `Обновить` button and is the normal user path for refreshing `>`/`x`, parent formulas, and row-action shapes after manual edits.

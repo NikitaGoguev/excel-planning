@@ -390,6 +390,10 @@ Public Function TaskEstimateCsvHeaderTheme() As String
     TaskEstimateCsvHeaderTheme = TextFromCodes(1058, 1077, 1084, 1072)
 End Function
 
+Public Function TaskEstimateCsvHeaderDirection() As String
+    TaskEstimateCsvHeaderDirection = TextFromCodes(1055, 1086, 1083, 1100, 1079, 1086, 1074, 1072, 1090, 1077, 1083, 1100, 1089, 1082, 1086, 1077, 32, 1087, 1086, 1083, 1077, 32, 40, 1058, 1080, 1087, 32, 1058, 1077, 1084, 1099, 32, 40, 1069, 1055, 1048, 1050, 1040, 41, 41)
+End Function
+
 Public Function TaskEstimateTextNoCsvRows() As String
     TaskEstimateTextNoCsvRows = TextFromCodes(1042, 32, 67, 83, 86, 32, 1085, 1077, 32, 1085, 1072, 1081, 1076, 1077, 1085, 1086, 32, 1089, 1090, 1088, 1086, 1082, 32, 1076, 1083, 1103, 32, 1080, 1084, 1087, 1086, 1088, 1090, 1072, 46)
 End Function
@@ -486,7 +490,7 @@ Public Sub AssertTaskEstimateUnicodeTextForTest()
     If TaskEstimateTextStatistics() <> TextFromCodes(1057, 1090, 1072, 1090, 1080, 1089, 1090, 1080, 1082, 1072) Then
         Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate statistics text is inconsistent."
     End If
-    If TaskEstimateCsvHeaderKey() = "" Or TaskEstimateCsvHeaderTheme() = "" Or TaskEstimateTextClearPrompt() = "" Or TaskEstimateTextImportCsvTitle() = "" Then
+    If TaskEstimateCsvHeaderKey() = "" Or TaskEstimateCsvHeaderTheme() = "" Or TaskEstimateCsvHeaderDirection() = "" Or TaskEstimateTextClearPrompt() = "" Or TaskEstimateTextImportCsvTitle() = "" Then
         Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate dialog helpers are empty."
     End If
 

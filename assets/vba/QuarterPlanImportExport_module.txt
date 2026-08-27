@@ -802,12 +802,15 @@ Public Function ImportTaskEstimatesCsvFile(ByVal csvPath As String, ByVal import
     Dim rowValues As Variant
     Dim ticketIndex As Long
     Dim subjectIndex As Long
+    Dim directionIndex As Long
     Dim rowIndex As Long
     Dim importedCount As Long
     Dim tickets() As String
     Dim descriptions() As String
+    Dim directions() As String
     Dim ticketText As String
     Dim descriptionText As String
+    Dim directionText As String
     Dim maxRows As Long
     Dim usedRows As Long
     Dim availableRows As Long
@@ -833,6 +836,7 @@ Public Function ImportTaskEstimatesCsvFile(ByVal csvPath As String, ByVal import
     headerRow = csvRows.Item(1)
     ticketIndex = FindCsvHeaderIndex(headerRow, TaskEstimateCsvHeaderKey())
     subjectIndex = FindCsvHeaderIndex(headerRow, TaskEstimateCsvHeaderTheme())
+    directionIndex = FindCsvHeaderIndex(headerRow, TaskEstimateCsvHeaderDirection())
     If ticketIndex = 0 Or subjectIndex = 0 Then
         Err.Raise 5, , "CSV must contain required headers: " & TaskEstimateCsvHeaderKey() & ", " & TaskEstimateCsvHeaderTheme() & "."
     End If
@@ -841,17 +845,21 @@ Public Function ImportTaskEstimatesCsvFile(ByVal csvPath As String, ByVal import
         rowValues = csvRows.Item(rowIndex)
         ticketText = CsvField(rowValues, ticketIndex)
         descriptionText = CsvField(rowValues, subjectIndex)
+        directionText = CsvField(rowValues, directionIndex)
         If Trim$(ticketText) <> "" Or Trim$(descriptionText) <> "" Then
             importedCount = importedCount + 1
             If importedCount = 1 Then
                 ReDim tickets(1 To 1)
                 ReDim descriptions(1 To 1)
+                ReDim directions(1 To 1)
             Else
                 ReDim Preserve tickets(1 To importedCount)
                 ReDim Preserve descriptions(1 To importedCount)
+                ReDim Preserve directions(1 To importedCount)
             End If
             tickets(importedCount) = ticketText
             descriptions(importedCount) = descriptionText
+            directions(importedCount) = directionText
         End If
     Next rowIndex
 
@@ -896,6 +904,7 @@ Public Function ImportTaskEstimatesCsvFile(ByVal csvPath As String, ByVal import
     For rowIndex = 1 To importedCount
         targetRow = targetStartRow + rowIndex - 1
         ClearTaskEstimateRow tbl, targetRow
+        tbl.DataBodyRange.Cells(targetRow, EST_COL_DIRECTION).Value = directions(rowIndex)
         tbl.DataBodyRange.Cells(targetRow, EST_COL_DESCRIPTION).Value = descriptions(rowIndex)
         tbl.DataBodyRange.Cells(targetRow, EST_COL_TICKET).Value = tickets(rowIndex)
         TaskEstimateSheetCell(tbl, targetRow, EST_SHEET_COL_TASK_ID).Value = NewTaskEstimateId()

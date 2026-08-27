@@ -405,20 +405,33 @@ try {
         Remove-Item -LiteralPath $tempDir -Recurse -Force
     }
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
+    $legacyCsvPath = Join-Path $tempDir "task-estimates-legacy.csv"
     $taskExportPath = Join-Path $tempDir "task-estimates-export.xlsx"
     $expressExportPath = Join-Path $tempDir "express-export.xlsx"
     $backlogExportPath = Join-Path $tempDir "quarter-plan-export.xlsx"
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    [System.IO.File]::WriteAllText($legacyCsvPath, "Ключ запроса,Тема`r`nPLAN-LEGACY,Legacy CSV import`r`n", $utf8WithoutBom)
 
     $excel.Run("RunQuarterPlanRepairActionButtons")
     $excel.Run("RunTaskEstimateRepairActionButtons")
 
     $taskExpectedDescription = "Настройка центра уведомлений"
     $taskExpectedKey = "PLAN-2001"
+    $taskExpectedDirection = "Бизнес-эффект (производство)"
 
     $excel.Run("RunTaskEstimateImportCsvPath", $csvPath, $true)
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 2).Text) $taskExpectedDirection "Imported task direction"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 3).Text) $taskExpectedDescription "Imported task description"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 4).Text) $taskExpectedKey "Imported task key"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 3).Text) "" "Second task row after replace import"
+
+    $excel.Run("RunTaskEstimateImportCsvPath", $legacyCsvPath, $true)
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 2).Text) "" "Legacy CSV imported task direction"
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 3).Text) "Legacy CSV import" "Legacy CSV imported task description"
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 4).Text) "PLAN-LEGACY" "Legacy CSV imported task key"
+
+    $excel.Run("RunTaskEstimateImportCsvPath", $csvPath, $true)
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 2).Text) $taskExpectedDirection "Restored imported task direction"
     $estimateTable.DataBodyRange.Cells(1, 1).Value2 = 10
     $estimateTable.DataBodyRange.Cells(1, 2).Value2 = "BE"
     $estimateTable.DataBodyRange.Cells(1, 5).Value2 = "root note"
