@@ -689,7 +689,10 @@ Public Function ExportTaskEstimateExpressFile(ByVal tbl As ListObject, ByVal row
 
     RefreshTaskEstimateTable tbl
 
-    Set templateWs = ThisWorkbook.Worksheets(SHEET_EXPRESS_TEMPLATE)
+    Set templateWs = GetTaskEstimateExpressTemplateWorksheet()
+    If templateWs Is Nothing Then
+        Err.Raise 9, , "Express template worksheet was not found: " & TaskEstimateTextExpressTemplateSheetName()
+    End If
     templateWs.Copy
     Set exportWb = ActiveWorkbook
     Set exportWs = exportWb.Worksheets(1)

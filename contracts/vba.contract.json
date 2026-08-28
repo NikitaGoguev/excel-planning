@@ -114,6 +114,10 @@
       "pattern": "\"(?:_оценка_задач_| Экспресс-оценка\\.xlsx)\""
     },
     {
+      "name": "Raw Cyrillic sheet 03 express template sheet name",
+      "pattern": "\"100_Шаблон экспресс оценки\""
+    },
+    {
       "name": "Raw Cyrillic sheet 03 import or clear dialog",
       "pattern": "\"(?:Импорт задач из CSV|Импорт оценки задач|Очистить все задачи|CSV содержит задач)"
     }

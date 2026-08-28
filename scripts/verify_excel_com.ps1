@@ -520,6 +520,7 @@ try {
     $estimateSheet.Range("H1").Value2 = "broken statistics"
     $excel.Run("RunTaskEstimateRefresh")
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertTaskEstimateUnicodeTextForTest")
+    Write-Pass "COM sheet 03 Unicode-safe express template lookup"
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlTextForTest")
     $expectedTaskHeaders = @("Приоритет", "Направление", "Описание", "ЗНИ/Jira", "Примечание", "DE", "AN", "BE", "FE", "QA", "Комментарий")
     for ($col = 1; $col -le $expectedTaskHeaders.Count; $col++) {
