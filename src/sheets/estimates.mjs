@@ -21,6 +21,8 @@ export function buildEstimatesSheet(context) {
   applyAction(estimates.getRange("D1"));
   estimates.getRange("D2").values = [[taskEstimateCsvCaption(limits)]];
   applyAction(estimates.getRange("D2"));
+  estimates.getRange(layout.taskEstimates.jqlActionCell).values = [["JQL"]];
+  applyAction(estimates.getRange(layout.taskEstimates.jqlActionCell));
   estimates.getRange("H1:K1").merge();
   estimates.getRange("H1").values = [["Статистика"]];
   applyTitle(estimates.getRange("H1:K1"));

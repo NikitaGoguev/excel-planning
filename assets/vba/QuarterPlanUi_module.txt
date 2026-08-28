@@ -29,6 +29,7 @@ Public Sub RefreshQuarterPlanActionGrid()
     AddQuarterPlanRecalculateLink ws
     AddQuarterPlanExportBacklogLink ws
     AddQuarterPlanBacklogAddAllLink ws
+    AddQuarterPlanJqlLinks ws
     RemoveQuarterPlanActionButtons ws
     AddQuarterPlanShapeButtons ws
 
@@ -48,6 +49,7 @@ Public Sub SetupQuarterPlanActionUi(ByVal ws As Worksheet)
     AddQuarterPlanRecalculateLink ws
     AddQuarterPlanExportBacklogLink ws
     AddQuarterPlanBacklogAddAllLink ws
+    AddQuarterPlanJqlLinks ws
     RemoveQuarterPlanActionButtons ws
     AddQuarterPlanShapeButtons ws
 
@@ -167,6 +169,7 @@ Public Sub RemoveTaskEstimateActionButtons(ByVal ws As Worksheet)
     ws.Shapes(TASK_ESTIMATE_CLEAR_SHAPE_NAME).Delete
     ws.Shapes(TASK_ESTIMATE_REFRESH_SHAPE_NAME).Delete
     ws.Shapes(TASK_ESTIMATE_EXPORT_SHAPE_NAME).Delete
+    ws.Shapes(JQL_TASK_SHAPE_NAME).Delete
     For shapeIndex = ws.Shapes.Count To 1 Step -1
         shapeName = ws.Shapes(shapeIndex).Name
         If Left$(shapeName, Len(TASK_ESTIMATE_ACTION_SHAPE_PREFIX)) = TASK_ESTIMATE_ACTION_SHAPE_PREFIX Then
@@ -184,6 +187,7 @@ Public Sub AddTaskEstimateTopButtons(ByVal ws As Worksheet)
     AddTaskEstimateTopButton ws, TASK_ESTIMATE_EXPORT_SHAPE_NAME, TASK_ESTIMATE_EXPORT_CELL, TASK_ESTIMATE_EXPORT_RANGE, TaskEstimateTextExportXlsx(), "RunTaskEstimateExportXlsx"
     AddTaskEstimateTopButton ws, TASK_ESTIMATE_IMPORT_XLSX_SHAPE_NAME, TASK_ESTIMATE_IMPORT_XLSX_CELL, TASK_ESTIMATE_IMPORT_XLSX_RANGE, TaskEstimateTextImportXlsx(), "RunTaskEstimateImportXlsx"
     AddTaskEstimateTopButton ws, TASK_ESTIMATE_IMPORT_SHAPE_NAME, TASK_ESTIMATE_IMPORT_CELL, TASK_ESTIMATE_IMPORT_RANGE, TaskEstimateImportCaption(ws), "RunTaskEstimateImportCsv"
+    AddTaskEstimateTopButton ws, JQL_TASK_SHAPE_NAME, QP_TASK_JQL_ACTION_CELL, QP_TASK_JQL_ACTION_CELL, "JQL", "RunCopyJql"
     Exit Sub
 
 Fail:
@@ -568,6 +572,9 @@ Public Sub RemoveQuarterPlanActionButtons(ByVal ws As Worksheet)
     ws.Shapes("btnQuarterPlanRecalculate").Delete
     ws.Shapes("btnQuarterPlanExportBacklog").Delete
     ws.Shapes("btnQuarterPlanAddAllBacklog").Delete
+    ws.Shapes(JQL_ACTIVE_SHAPE_NAME).Delete
+    ws.Shapes(JQL_GREY_SHAPE_NAME).Delete
+    ws.Shapes(JQL_BACKLOG_SHAPE_NAME).Delete
     For shapeIndex = ws.Shapes.Count To 1 Step -1
         shapeName = ws.Shapes(shapeIndex).Name
         If Left$(shapeName, Len(QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX)) = QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX _
@@ -583,6 +590,9 @@ Public Sub AddQuarterPlanShapeButtons(ByVal ws As Worksheet)
     AddQuarterPlanButton ws, "btnQuarterPlanRecalculate", ws.Range("P2"), QuarterPlanButtonCaption(ws.Range("P2"), QuarterPlanTextRecalculatePlan()), "RunQuarterPlanRecalculate"
     AddQuarterPlanButton ws, "btnQuarterPlanExportBacklog", ws.Range("Q2"), QuarterPlanButtonCaption(ws.Range("Q2"), QuarterPlanTextExportBacklog()), "RunQuarterPlanExportBacklog"
     AddQuarterPlanButton ws, "btnQuarterPlanAddAllBacklog", ws.Range(QP_BACKLOG_ACTION_CELL), QuarterPlanTextAddAllToPlan(), "RunQuarterPlanAddAllBacklogToPlan"
+    AddQuarterPlanButton ws, JQL_ACTIVE_SHAPE_NAME, ws.Range(QP_ACTIVE_PLAN_JQL_ACTION_CELL), "JQL", "RunCopyJql"
+    AddQuarterPlanButton ws, JQL_GREY_SHAPE_NAME, ws.Range(QP_GREY_ZONE_JQL_ACTION_CELL), "JQL", "RunCopyJql"
+    AddQuarterPlanButton ws, JQL_BACKLOG_SHAPE_NAME, ws.Range(QP_BACKLOG_JQL_ACTION_CELL), "JQL", "RunCopyJql"
     AddQuarterPlanTableActionButtons ws.ListObjects("tblPlanActive")
     AddQuarterPlanTableActionButtons ws.ListObjects("tblPlanGrey")
     AddQuarterPlanTableActionButtons ws.ListObjects("tblPlanBacklog")
@@ -848,6 +858,31 @@ Public Sub AddQuarterPlanBacklogAddAllLink(ByVal ws As Worksheet)
     cell.VerticalAlignment = xlCenter
 
 SafeExit:
+End Sub
+
+Public Sub AddQuarterPlanJqlLinks(ByVal ws As Worksheet)
+    On Error GoTo Fail
+
+    StyleQuarterPlanJqlCell ws.Range(QP_ACTIVE_PLAN_JQL_ACTION_CELL)
+    StyleQuarterPlanJqlCell ws.Range(QP_GREY_ZONE_JQL_ACTION_CELL)
+    StyleQuarterPlanJqlCell ws.Range(QP_BACKLOG_JQL_ACTION_CELL)
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "AddQuarterPlanJqlLinks: " & CStr(Err.Number) & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub StyleQuarterPlanJqlCell(ByVal cell As Range)
+    cell.Hyperlinks.Delete
+    cell.Value = "JQL"
+    cell.Interior.Color = RGB(217, 234, 247)
+    cell.Font.Name = DESIGN_FONT_NAME
+    cell.Font.Size = DESIGN_FONT_SIZE
+    cell.Font.Color = RGB(31, 78, 121)
+    cell.Font.Bold = True
+    cell.Font.Underline = False
+    cell.HorizontalAlignment = xlCenter
+    cell.VerticalAlignment = xlCenter
 End Sub
 
 Public Sub AddQuarterPlanActionLink(ByVal ws As Worksheet, ByVal cell As Range)

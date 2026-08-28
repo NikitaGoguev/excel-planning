@@ -29,10 +29,15 @@ test("default limits reproduce the v1.0.0 layout", () => {
   assert.equal(layout.teamMembers.tableRange, "A23:L43");
   assert.equal(layout.holidays.tableRange, "A13:D33");
   assert.equal(layout.taskEstimates.tableRange, "C3:M103");
+  assert.equal(layout.taskEstimates.jqlActionCell, "F2");
   assert.equal(layout.activePlan.tableRange, "A5:S25");
+  assert.equal(layout.activePlan.jqlActionCell, "I4");
   assert.equal(layout.greyZone.tableRange, "A30:S50");
+  assert.equal(layout.greyZone.jqlActionCell, "I29");
   assert.equal(layout.backlog.tableRange, "A55:S155");
   assert.equal(layout.backlog.actionCell, "A54");
+  assert.equal(layout.backlog.jqlActionCell, "I54");
+  assert.equal(layout.references.jqlClipboardCell, "Z1");
   assert.equal(taskEstimateCsvCaption(defaults), "Импорт CSV (до 100)");
 });
 
@@ -41,9 +46,13 @@ test("alternate limits derive every structural section", () => {
   assert.equal(layout.teamMembers.tableRange, "A23:L27");
   assert.equal(layout.holidays.tableRange, "A13:D18");
   assert.equal(layout.taskEstimates.tableRange, "C3:M11");
+  assert.equal(layout.taskEstimates.jqlActionCell, "F2");
   assert.equal(layout.activePlan.tableRange, "A5:S8");
+  assert.equal(layout.activePlan.jqlActionCell, "I4");
   assert.equal(layout.greyZone.tableRange, "A13:S15");
+  assert.equal(layout.greyZone.jqlActionCell, "I12");
   assert.equal(layout.backlog.actionCell, "A19");
+  assert.equal(layout.backlog.jqlActionCell, "I19");
   assert.equal(layout.backlog.tableRange, "A20:S28");
 });
 
@@ -87,7 +96,11 @@ test("alternate limits build resizes all structural sections", async () => {
     assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanGrey").table.tableRef, "A13:S15");
     assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanBacklog").table.tableRef, "A20:S28");
     assert.equal(workbook.getWorksheet("03_Оценка задач").getCell("D2").value, "Импорт CSV (до 8)");
+    assert.equal(workbook.getWorksheet("03_Оценка задач").getCell("F2").value, "JQL");
     assert.equal(workbook.getWorksheet("04_Квартальный план").getCell("A19").value, "++");
+    assert.equal(workbook.getWorksheet("04_Квартальный план").getCell("I4").value, "JQL");
+    assert.equal(workbook.getWorksheet("04_Квартальный план").getCell("I12").value, "JQL");
+    assert.equal(workbook.getWorksheet("04_Квартальный план").getCell("I19").value, "JQL");
   } finally {
     const tempRoot = path.resolve(os.tmpdir());
     const resolved = path.resolve(temporaryDirectory);

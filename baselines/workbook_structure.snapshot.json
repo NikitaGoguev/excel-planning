@@ -1,10 +1,14 @@
 {
   "actionCells": {
     "tblPlanBacklog:A54": "++",
+    "tblPlanBacklog:I29": "JQL",
+    "tblPlanBacklog:I4": "JQL",
+    "tblPlanBacklog:I54": "JQL",
     "tblPlanBacklog:Q2": "Экспорт плана",
     "tblTaskEstimates:C1": "Экспорт",
     "tblTaskEstimates:D1": "Импорт",
     "tblTaskEstimates:D2": "Импорт CSV (до 100)",
+    "tblTaskEstimates:F2": "JQL",
     "tblTaskEstimates:M3": "Экспорт",
     "tblTaskEstimates:N3": "+"
   },
@@ -24,6 +28,7 @@
     "tblYesNo": "G3:G5"
   },
   "vbaPublicApi": [
+    "RunCopyJql",
     "RunQuarterPlanAddAllBacklogToPlan",
     "RunQuarterPlanCellAction",
     "RunQuarterPlanExportBacklog",

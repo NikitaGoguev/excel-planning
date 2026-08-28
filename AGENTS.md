@@ -97,6 +97,8 @@ On `04_Квартальный план`:
 - With the default config, `tblPlanBacklog` is `A55:S155` and the bulk action is `A54`. Both backlog and sheet 03 capacities derive from the same `taskRows` value.
 - `RunQuarterPlanRecalculate` recalculates dates only for active plan rows through the Mac-safe scheduling path.
 - `G2` (`Загрузить 03 в бэклог`), `P2` (`Посчитать план`), and `Q2` (`Экспорт плана`) remain shape-backed buttons bound to stable public macros.
+- `JQL` action buttons are shape-backed at the layout-derived cells for active plan, grey zone, and backlog (defaults `I4`, `I29`, and `I54`). They call the plain public macro `RunCopyJql` and copy `issuekey in (...)` from the corresponding table's `ЗНИ/Jira` column.
+- The grey-zone and backlog JQL action rows must be derived from `config/workbook-limits.json`; VBA uses generated `QP_*_JQL_ACTION_CELL` constants rather than handwritten row numbers.
 - `RunQuarterPlanExportBacklog` exports non-empty `tblPlanActive` rows to a standalone `.xlsx`, writing only visible user columns `F:S`. The default filename is `<Команда>_<Год>_Q<Квартал>_квартальный план_<yyyy-mm-dd_hh-nn>.xlsx`, with team/year/quarter read from `00_Настройки`.
 - The Q2 export caption must stay Mac-safe: keep the visible cell text as the caption source and avoid raw Cyrillic VBA literals for this button text/default filename parts where `ChrW$` helpers are already used.
 - Technical schedule columns `T:AF` are visible by design and must not be hidden; they show AN/BE/FE/QA durations, dates, and diagnostics.
@@ -135,6 +137,8 @@ On `03_Оценка задач`:
 - `C2` is a shape-backed `Обновить` button. It restores the configured task range before rebuilding row actions and parent formulas.
 - `C2` is a shape-backed `Обновить` button. It is the normal user path to refresh row actions `>`/`x`, parent formulas, and sheet 03 shape buttons after manual edits.
 - `C1` is a shape-backed `Экспорт` button. It exports visible user columns `C:M` to a standalone `.xlsx`, with parent estimates written as values and a default filename based on `02_Capacity!E3` plus export date/time.
+- `F2` is a shape-backed `JQL` button bound to `RunCopyJql`. It copies only root-task `ЗНИ/Jira` values in table order; blank values and case-insensitive duplicates are excluded.
+- JQL clipboard staging uses the layout-derived cell in visible column `Z` on `99_Справочники` and `Range.Copy`. Do not hide the source column: Excel copies a hidden cell only to its internal clipboard and exposes an empty plain-text value to browsers and other applications. Keep this path free of ActiveX, `DataObject`, Windows API, and `CreateObject`, preserve `ThisWorkbook.Saved`, and leave the clipboard unchanged when no keys exist or the text exceeds Excel's 32,767-character cell limit.
 - Per-root `M` export actions create an `.xlsx` from the visible `100_Шаблон экспресс оценки` sheet. The default filename is `<ЗНИ/Jira> Экспресс-оценка.xlsx`; values are written to `E2:K2` and `E3:K3`, and root/child/grandchild rows are written from row 17 with descriptions in `A:D`, `B:D`, or `C:D` and estimates in `G/I/J/K`.
 - CSV import expects UTF-8, comma-delimited files with headers. It reads required `Ключ запроса` -> `ЗНИ/Jira` and `Тема` -> `Описание`, plus optional `Пользовательское поле (Тип Темы (ЭПИКА))` -> `Направление`; a missing optional direction header leaves `Направление` blank, and other extra columns are ignored.
 - Use `assets/import1.csv` as the canonical sample file for quick manual/COM checks of the sheet 03 CSV import.

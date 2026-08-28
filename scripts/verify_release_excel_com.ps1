@@ -4,6 +4,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Windows.Forms
+
+$nodeExecutable = if ($env:QUARTER_PLANNING_NODE_EXECUTABLE) { $env:QUARTER_PLANNING_NODE_EXECUTABLE } else { "node" }
+$layoutJson = & $nodeExecutable (Join-Path $PSScriptRoot "print_workbook_layout.mjs")
+if ($LASTEXITCODE -ne 0) { throw "Could not resolve workbook layout" }
+$workbookLayout = $layoutJson | ConvertFrom-Json
 
 function Resolve-ProjectPath([string]$Path) {
     $resolvedPath = $Path
@@ -17,6 +23,19 @@ function Assert-Blank($Cell, [string]$Context) {
 
 function Assert-Text($Cell, [string]$Expected, [string]$Context) {
     if ([string]$Cell.Text -cne $Expected) { throw "$Context is '$($Cell.Text)', expected '$Expected'" }
+}
+
+function Get-ClipboardPlainText {
+    $lastError = $null
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
+        try {
+            return [System.Windows.Forms.Clipboard]::GetText()
+        } catch {
+            $lastError = $_.Exception
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    throw "Could not read the Windows plain-text clipboard: $($lastError.Message)"
 }
 
 function Assert-ReleaseCommentOptions($Workbook, [string]$Context) {
@@ -97,14 +116,29 @@ try {
     Assert-ReleaseCommentOptions $workbook "XLSM"
     $excel.Run("RunTaskEstimateRepairActionButtons")
     $excel.Run("RunQuarterPlanRepairActionButtons")
-    foreach ($shapeName in @("btnTaskClearAll", "btnTaskRefresh", "btnTaskExportXlsx", "btnTaskImportXlsx", "btnTaskImportCsv")) {
+    foreach ($shapeName in @("btnTaskClearAll", "btnTaskRefresh", "btnTaskExportXlsx", "btnTaskImportXlsx", "btnTaskImportCsv", "btnJql03")) {
         if ([string]::IsNullOrWhiteSpace([string]$estimateSheet.Shapes.Item($shapeName).OnAction)) { throw "Release shape $shapeName has empty OnAction" }
     }
-    foreach ($shapeName in @("btnQuarterPlanReloadBacklog", "btnQuarterPlanRecalculate", "btnQuarterPlanExportBacklog", "btnQuarterPlanAddAllBacklog")) {
+    foreach ($shapeName in @("btnQuarterPlanReloadBacklog", "btnQuarterPlanRecalculate", "btnQuarterPlanExportBacklog", "btnQuarterPlanAddAllBacklog", "btnJqlA", "btnJqlG", "btnJqlB")) {
         if ([string]::IsNullOrWhiteSpace([string]$planSheet.Shapes.Item($shapeName).OnAction)) { throw "Release shape $shapeName has empty OnAction" }
     }
+    $activeTable = $planSheet.ListObjects("tblPlanActive")
+    $activeTickets = $activeTable.ListColumns("ЗНИ/Jira").DataBodyRange
+    $activeTickets.ClearContents()
+    $activeTickets.Cells(1, 1).Value2 = "REL-1"
+    $activeTickets.Cells(2, 1).Value2 = "REL-2"
+    $referencesSheet = $workbook.Worksheets.Item("99_Справочники")
+    $jqlClipboardCell = $referencesSheet.Range([string]$workbookLayout.references.jqlClipboardCell)
+    $jqlClipboardCell.EntireColumn.Hidden = $true
+    $workbook.Saved = $true
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.CopyJqlForTableNameForTest", "tblPlanActive")
+    Start-Sleep -Milliseconds 300
+    $plainClipboardText = (Get-ClipboardPlainText) -replace "(`r`n|`n|`r)+$", ""
+    if ($plainClipboardText -cne "issuekey in (REL-1, REL-2)") { throw "Release JQL clipboard is '$plainClipboardText'" }
+    if ([bool]$jqlClipboardCell.EntireColumn.Hidden) { throw "Release JQL staging column remained hidden" }
+    if (![bool]$workbook.Saved) { throw "Release JQL copy changed ThisWorkbook.Saved" }
     Assert-NoFormulaErrors $workbook "XLSM"
-    Write-Host "PASS clean release XLSX/XLSM Excel COM smoke"
+    Write-Host "PASS clean release XLSX/XLSM Excel COM smoke and JQL clipboard"
 } finally {
     if ($workbook -ne $null) {
         $workbook.Close($false)

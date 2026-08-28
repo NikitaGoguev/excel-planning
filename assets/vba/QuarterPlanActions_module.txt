@@ -42,6 +42,17 @@ Public Sub RunQuarterPlanRepairActionButtons()
     ThisWorkbook.RebuildQuarterPlanActionUi
 End Sub
 
+Public Sub RunCopyJql()
+    On Error GoTo Fail
+
+    ThisWorkbook.HandleCopyJql CStr(Application.Caller)
+    Exit Sub
+
+Fail:
+    MsgBox TaskEstimateTextErrorPrefix() & "RunCopyJql: " & CStr(Err.Number) & " - " & Err.Description & vbCrLf & _
+        "Caller: " & CStr(Application.Caller), vbExclamation
+End Sub
+
 Public Sub RunTaskEstimateCellAction()
     On Error GoTo Fail
 

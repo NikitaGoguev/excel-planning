@@ -295,6 +295,15 @@ export function buildPlanSheet(context) {
     verticalAlignment: "center",
   };
 
+  for (const actionCell of [
+    layout.activePlan.jqlActionCell,
+    layout.greyZone.jqlActionCell,
+    layout.backlog.jqlActionCell,
+  ]) {
+    plan.getRange(actionCell).values = [["JQL"]];
+    applyAction(plan.getRange(actionCell));
+  }
+
   plan.getRange("G2:G4").merge();
   plan.getRange("G2").values = [["\u0417\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c 03 \u0432 \u0431\u044d\u043a\u043b\u043e\u0433"]];
   plan.getRange("G2:G4").format = {

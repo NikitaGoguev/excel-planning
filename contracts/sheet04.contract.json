@@ -6,7 +6,10 @@
     "Q2": "Экспорт плана"
   },
   "requiredLayoutCells": {
-    "backlog.actionCell": "++"
+    "activePlan.jqlActionCell": "JQL",
+    "greyZone.jqlActionCell": "JQL",
+    "backlog.actionCell": "++",
+    "backlog.jqlActionCell": "JQL"
   },
   "visibleColumns": ["T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"]
 }

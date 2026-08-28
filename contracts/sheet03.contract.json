@@ -8,5 +8,8 @@
     "D2": { "template": "taskEstimateCsvCaption" },
     "M3": "Экспорт",
     "N3": "+"
+  },
+  "requiredLayoutCells": {
+    "taskEstimates.jqlActionCell": "JQL"
   }
 }

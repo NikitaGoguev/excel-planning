@@ -56,12 +56,13 @@ export function deriveWorkbookLayout(input) {
   holidays.dataEndRow = holidays.headerRow + limits.holidayRows;
   holidays.tableRange = `A${holidays.headerRow}:D${holidays.dataEndRow}`;
 
-  const taskEstimates = { headerRow: 3, dataStartRow: 4 };
+  const taskEstimates = { headerRow: 3, dataStartRow: 4, jqlActionCell: "F2" };
   taskEstimates.dataEndRow = taskEstimates.headerRow + limits.taskRows;
   taskEstimates.tableRange = `C${taskEstimates.headerRow}:M${taskEstimates.dataEndRow}`;
 
   const activePlan = { titleRow: 1, headerRow: 5, dataStartRow: 6 };
   activePlan.dataEndRow = activePlan.headerRow + limits.activePlanRows;
+  activePlan.jqlActionCell = `I${activePlan.headerRow - 1}`;
   activePlan.titleRange = `A${activePlan.titleRow}:S${activePlan.titleRow}`;
   activePlan.tableRange = `A${activePlan.headerRow}:S${activePlan.dataEndRow}`;
 
@@ -71,6 +72,7 @@ export function deriveWorkbookLayout(input) {
   };
   greyZone.dataStartRow = greyZone.headerRow + 1;
   greyZone.dataEndRow = greyZone.headerRow + limits.greyZoneRows;
+  greyZone.jqlActionCell = `I${greyZone.headerRow - 1}`;
   greyZone.titleRange = `A${greyZone.titleRow}:S${greyZone.titleRow}`;
   greyZone.tableRange = `A${greyZone.headerRow}:S${greyZone.dataEndRow}`;
 
@@ -82,10 +84,13 @@ export function deriveWorkbookLayout(input) {
   backlog.dataStartRow = backlog.headerRow + 1;
   backlog.dataEndRow = backlog.headerRow + limits.taskRows;
   backlog.actionCell = `A${backlog.actionRow}`;
+  backlog.jqlActionCell = `I${backlog.actionRow}`;
   backlog.titleRange = `A${backlog.titleRow}:S${backlog.titleRow}`;
   backlog.tableRange = `A${backlog.headerRow}:S${backlog.dataEndRow}`;
 
-  return Object.freeze({ limits, teamMembers, holidays, taskEstimates, activePlan, greyZone, backlog });
+  const references = { jqlClipboardCell: "Z1" };
+
+  return Object.freeze({ limits, teamMembers, holidays, taskEstimates, activePlan, greyZone, backlog, references });
 }
 
 export function taskEstimateCsvCaption(limits) {
@@ -117,19 +122,24 @@ export function renderVbaLimitsModule(input) {
     `Public Const QP_TASK_FIRST_ROW As Long = ${layout.taskEstimates.dataStartRow}`,
     `Public Const QP_TASK_LAST_ROW As Long = ${layout.taskEstimates.dataEndRow}`,
     `Public Const QP_TASK_TABLE_RANGE As String = "${layout.taskEstimates.tableRange}"`,
+    `Public Const QP_TASK_JQL_ACTION_CELL As String = "${layout.taskEstimates.jqlActionCell}"`,
     `Public Const QP_ACTIVE_PLAN_HEADER_ROW As Long = ${layout.activePlan.headerRow}`,
     `Public Const QP_ACTIVE_PLAN_FIRST_ROW As Long = ${layout.activePlan.dataStartRow}`,
     `Public Const QP_ACTIVE_PLAN_LAST_ROW As Long = ${layout.activePlan.dataEndRow}`,
     `Public Const QP_ACTIVE_PLAN_TABLE_RANGE As String = "${layout.activePlan.tableRange}"`,
+    `Public Const QP_ACTIVE_PLAN_JQL_ACTION_CELL As String = "${layout.activePlan.jqlActionCell}"`,
     `Public Const QP_GREY_ZONE_HEADER_ROW As Long = ${layout.greyZone.headerRow}`,
     `Public Const QP_GREY_ZONE_FIRST_ROW As Long = ${layout.greyZone.dataStartRow}`,
     `Public Const QP_GREY_ZONE_LAST_ROW As Long = ${layout.greyZone.dataEndRow}`,
     `Public Const QP_GREY_ZONE_TABLE_RANGE As String = "${layout.greyZone.tableRange}"`,
+    `Public Const QP_GREY_ZONE_JQL_ACTION_CELL As String = "${layout.greyZone.jqlActionCell}"`,
     `Public Const QP_BACKLOG_HEADER_ROW As Long = ${layout.backlog.headerRow}`,
     `Public Const QP_BACKLOG_ACTION_CELL As String = "${layout.backlog.actionCell}"`,
+    `Public Const QP_BACKLOG_JQL_ACTION_CELL As String = "${layout.backlog.jqlActionCell}"`,
     `Public Const QP_BACKLOG_FIRST_ROW As Long = ${layout.backlog.dataStartRow}`,
     `Public Const QP_BACKLOG_LAST_ROW As Long = ${layout.backlog.dataEndRow}`,
     `Public Const QP_BACKLOG_TABLE_RANGE As String = "${layout.backlog.tableRange}"`,
+    `Public Const QP_JQL_CLIPBOARD_CELL As String = "${layout.references.jqlClipboardCell}"`,
     "",
   ].join("\r\n");
 }

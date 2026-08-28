@@ -1,0 +1,239 @@
+Option Explicit
+Option Private Module
+
+Public Sub HandleCopyJql(ByVal callerName As String)
+    On Error GoTo Fail
+
+    Dim normalizedName As String
+    Dim ws As Worksheet
+    Dim shp As Shape
+    Dim tbl As ListObject
+    Dim expectedCell As String
+    Dim rootsOnly As Boolean
+
+    normalizedName = NormalizeShapeCallerName(callerName)
+    ResolveJqlShapeSource normalizedName, ws, tbl, rootsOnly, expectedCell
+    Set shp = ws.Shapes(normalizedName)
+    If shp.TopLeftCell.Address(False, False) <> expectedCell Then
+        Err.Raise 5, , "JQL shape anchor is " & shp.TopLeftCell.Address(False, False) & ", expected " & expectedCell & "."
+    End If
+
+    CopyJqlForTable tbl, rootsOnly, True
+    Exit Sub
+
+Fail:
+    Err.Raise Err.Number, "QuarterPlanJql.HandleCopyJql", Err.Description & vbCrLf & _
+        "Caller: " & callerName & vbCrLf & _
+        "Shape: " & normalizedName
+End Sub
+
+Public Sub ResolveJqlShapeSource(ByVal shapeName As String, ByRef ws As Worksheet, ByRef tbl As ListObject, ByRef rootsOnly As Boolean, ByRef expectedCell As String)
+    Select Case shapeName
+        Case JQL_TASK_SHAPE_NAME
+            Set ws = GetTaskEstimatesWorksheet()
+            rootsOnly = True
+            expectedCell = QP_TASK_JQL_ACTION_CELL
+            If Not ws Is Nothing Then Set tbl = ws.ListObjects("tblTaskEstimates")
+        Case JQL_ACTIVE_SHAPE_NAME
+            Set ws = GetQuarterPlanWorksheet()
+            expectedCell = QP_ACTIVE_PLAN_JQL_ACTION_CELL
+            If Not ws Is Nothing Then Set tbl = ws.ListObjects("tblPlanActive")
+        Case JQL_GREY_SHAPE_NAME
+            Set ws = GetQuarterPlanWorksheet()
+            expectedCell = QP_GREY_ZONE_JQL_ACTION_CELL
+            If Not ws Is Nothing Then Set tbl = ws.ListObjects("tblPlanGrey")
+        Case JQL_BACKLOG_SHAPE_NAME
+            Set ws = GetQuarterPlanWorksheet()
+            expectedCell = QP_BACKLOG_JQL_ACTION_CELL
+            If Not ws Is Nothing Then Set tbl = ws.ListObjects("tblPlanBacklog")
+        Case Else
+            Err.Raise 5, , "Unsupported JQL shape: " & shapeName
+    End Select
+
+    If ws Is Nothing Then Err.Raise 9, , "JQL source worksheet not found."
+    If tbl Is Nothing Then Err.Raise 9, , "JQL source table not found for shape " & shapeName & "."
+End Sub
+
+Public Sub CopyJqlForTable(ByVal tbl As ListObject, ByVal rootsOnly As Boolean, ByVal showConfirmation As Boolean)
+    On Error GoTo Fail
+
+    Dim jqlText As String
+    Dim keyCount As Long
+    Dim wsRefs As Worksheet
+    Dim clipboardCell As Range
+    Dim wasSaved As Boolean
+    Dim savedStateCaptured As Boolean
+
+    jqlText = BuildJqlForTable(tbl, rootsOnly, keyCount)
+    If keyCount = 0 Then
+        MsgBox JqlTextNoKeys(), vbInformation
+        Exit Sub
+    End If
+    If Not JqlTextFitsClipboard(jqlText) Then
+        MsgBox JqlTextTooLong(), vbExclamation
+        Exit Sub
+    End If
+
+    wasSaved = ThisWorkbook.Saved
+    savedStateCaptured = True
+    Set wsRefs = GetRefsWorksheet()
+    If wsRefs Is Nothing Then Err.Raise 9, , "References worksheet not found by tblPlanningRuleSettings."
+    Set clipboardCell = wsRefs.Range(QP_JQL_CLIPBOARD_CELL)
+    clipboardCell.EntireColumn.Hidden = False
+    clipboardCell.Value2 = jqlText
+    clipboardCell.Copy
+    ThisWorkbook.Saved = wasSaved
+
+    If showConfirmation Then MsgBox JqlTextCopiedPrefix() & CStr(keyCount), vbInformation
+    Exit Sub
+
+Fail:
+    If savedStateCaptured Then ThisWorkbook.Saved = wasSaved
+    Err.Raise Err.Number, "QuarterPlanJql.CopyJqlForTable", Err.Description
+End Sub
+
+Public Function BuildJqlForTable(ByVal tbl As ListObject, ByVal rootsOnly As Boolean, ByRef keyCount As Long) As String
+    Dim ticketValues As Variant
+    Dim levelValues As Variant
+    Dim levelRange As Range
+
+    If tbl Is Nothing Then Err.Raise 91, , "JQL source table is not available."
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+
+    ticketValues = JqlRangeValues2D(tbl.ListColumns(TaskEstimateHeaderTicket()).DataBodyRange)
+    If rootsOnly Then
+        Set levelRange = tbl.Parent.Range( _
+            tbl.Parent.Cells(tbl.DataBodyRange.Row, EST_SHEET_COL_LEVEL), _
+            tbl.Parent.Cells(tbl.DataBodyRange.Row + tbl.DataBodyRange.Rows.Count - 1, EST_SHEET_COL_LEVEL))
+        levelValues = JqlRangeValues2D(levelRange)
+    End If
+    BuildJqlForTable = BuildJqlText(ticketValues, levelValues, rootsOnly, keyCount)
+End Function
+
+Public Function BuildJqlForTableNameForTest(ByVal tableName As String) As String
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim keyCount As Long
+    Dim rootsOnly As Boolean
+
+    Set ws = FindWorksheetByTableName(tableName)
+    If ws Is Nothing Then Err.Raise 9, , "JQL test table not found: " & tableName
+    Set tbl = ws.ListObjects(tableName)
+    rootsOnly = (tableName = "tblTaskEstimates")
+    BuildJqlForTableNameForTest = BuildJqlForTable(tbl, rootsOnly, keyCount)
+End Function
+
+Public Sub CopyJqlForTableNameForTest(ByVal tableName As String)
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim rootsOnly As Boolean
+
+    Set ws = FindWorksheetByTableName(tableName)
+    If ws Is Nothing Then Err.Raise 9, , "JQL test table not found: " & tableName
+    Set tbl = ws.ListObjects(tableName)
+    rootsOnly = (tableName = "tblTaskEstimates")
+    CopyJqlForTable tbl, rootsOnly, False
+End Sub
+
+Public Sub AssertJqlForTableNameForTest(ByVal tableName As String, ByVal expectedJql As String)
+    Dim actualJql As String
+
+    actualJql = BuildJqlForTableNameForTest(tableName)
+    If actualJql <> expectedJql Then
+        Err.Raise 5, "AssertJqlForTableNameForTest", tableName & " JQL is '" & actualJql & "', expected '" & expectedJql & "'."
+    End If
+End Sub
+
+Public Function BuildJqlText(ByRef ticketValues As Variant, ByRef levelValues As Variant, ByVal rootsOnly As Boolean, ByRef keyCount As Long) As String
+    Dim keys() As String
+    Dim rowIndex As Long
+    Dim rowCount As Long
+    Dim ticket As String
+    Dim includeRow As Boolean
+
+    rowCount = UBound(ticketValues, 1)
+    ReDim keys(1 To rowCount)
+    keyCount = 0
+
+    For rowIndex = 1 To rowCount
+        includeRow = True
+        If rootsOnly Then includeRow = (TaskEstimateArrayLevel(levelValues(rowIndex, 1)) = 0)
+        If includeRow Then
+            ticket = Trim$(CStr(ticketValues(rowIndex, 1)))
+            If ticket <> "" Then
+                If Not JqlKeyExists(keys, keyCount, ticket) Then
+                    keyCount = keyCount + 1
+                    keys(keyCount) = ticket
+                End If
+            End If
+        End If
+    Next rowIndex
+
+    If keyCount = 0 Then Exit Function
+    ReDim Preserve keys(1 To keyCount)
+    BuildJqlText = "issuekey in (" & Join(keys, ", ") & ")"
+End Function
+
+Public Function JqlRangeValues2D(ByVal sourceRange As Range) As Variant
+    Dim values() As Variant
+
+    If sourceRange.CountLarge = 1 Then
+        ReDim values(1 To 1, 1 To 1)
+        values(1, 1) = sourceRange.Value2
+        JqlRangeValues2D = values
+    Else
+        JqlRangeValues2D = sourceRange.Value2
+    End If
+End Function
+
+Public Function JqlKeyExists(ByRef keys() As String, ByVal keyCount As Long, ByVal candidate As String) As Boolean
+    Dim index As Long
+
+    For index = 1 To keyCount
+        If StrComp(keys(index), candidate, vbTextCompare) = 0 Then
+            JqlKeyExists = True
+            Exit Function
+        End If
+    Next index
+End Function
+
+Public Function JqlTextFitsClipboard(ByVal value As String) As Boolean
+    JqlTextFitsClipboard = (Len(value) <= JQL_MAX_CELL_TEXT_LENGTH)
+End Function
+
+Public Sub AssertJqlTextForTest()
+    Dim tickets(1 To 6, 1 To 1) As Variant
+    Dim levels(1 To 6, 1 To 1) As Variant
+    Dim emptyTickets(1 To 1, 1 To 1) As Variant
+    Dim emptyLevels(1 To 1, 1 To 1) As Variant
+    Dim keyCount As Long
+    Dim actual As String
+
+    tickets(1, 1) = " ROOT-1 "
+    tickets(2, 1) = "CHILD-1"
+    tickets(3, 1) = "root-1"
+    tickets(4, 1) = ""
+    tickets(5, 1) = "ROOT-2"
+    tickets(6, 1) = "GRAND-1"
+    levels(1, 1) = 0
+    levels(2, 1) = 1
+    levels(3, 1) = 0
+    levels(4, 1) = 0
+    levels(5, 1) = 0
+    levels(6, 1) = 2
+
+    actual = BuildJqlText(tickets, levels, True, keyCount)
+    If actual <> "issuekey in (ROOT-1, ROOT-2)" Or keyCount <> 2 Then
+        Err.Raise 5, "AssertJqlTextForTest", "Unexpected root-only JQL: " & actual
+    End If
+
+    actual = BuildJqlText(tickets, levels, False, keyCount)
+    If actual <> "issuekey in (ROOT-1, CHILD-1, ROOT-2, GRAND-1)" Or keyCount <> 4 Then
+        Err.Raise 5, "AssertJqlTextForTest", "Unexpected all-row JQL: " & actual
+    End If
+
+    actual = BuildJqlText(emptyTickets, emptyLevels, True, keyCount)
+    If actual <> "" Or keyCount <> 0 Then Err.Raise 5, "AssertJqlTextForTest", "Empty JQL input was not empty."
+    If Not JqlTextFitsClipboard(String$(JQL_MAX_CELL_TEXT_LENGTH, "A")) Then Err.Raise 5, "AssertJqlTextForTest", "Maximum clipboard text was rejected."
+    If JqlTextFitsClipboard(String$(JQL_MAX_CELL_TEXT_LENGTH + 1, "A")) Then Err.Raise 5, "AssertJqlTextForTest", "Oversized clipboard text was accepted."
+End Sub

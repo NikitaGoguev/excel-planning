@@ -172,6 +172,10 @@ Public Sub HandleTaskEstimateShapeAction(ByVal shapeName As String)
     Call QuarterPlanCommon.HandleTaskEstimateShapeAction(shapeName)
 End Sub
 
+Public Sub HandleCopyJql(ByVal shapeName As String)
+    Call QuarterPlanJql.HandleCopyJql(shapeName)
+End Sub
+
 Public Sub RebuildQuarterPlanActionUi()
     QuarterPlanUi.RebuildQuarterPlanActionUi
 End Sub
@@ -198,6 +202,22 @@ End Sub
 
 Public Sub AssertQuarterPlanBacklogDefaultExportFileNameForTest()
     QuarterPlanCommon.AssertQuarterPlanBacklogDefaultExportFileNameForTest
+End Sub
+
+Public Sub AssertJqlTextForTest()
+    QuarterPlanJql.AssertJqlTextForTest
+End Sub
+
+Public Function BuildJqlForTableNameForTest(ByVal tableName As String) As String
+    BuildJqlForTableNameForTest = QuarterPlanJql.BuildJqlForTableNameForTest(tableName)
+End Function
+
+Public Sub CopyJqlForTableNameForTest(ByVal tableName As String)
+    QuarterPlanJql.CopyJqlForTableNameForTest tableName
+End Sub
+
+Public Sub AssertJqlForTableNameForTest(ByVal tableName As String, ByVal expectedJql As String)
+    QuarterPlanJql.AssertJqlForTableNameForTest tableName, expectedJql
 End Sub
 
 Public Sub ButtonImportTaskEstimatesCsv()

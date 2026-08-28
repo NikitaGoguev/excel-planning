@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+Add-Type -AssemblyName System.Windows.Forms
 
 $nodeExecutable = if ($env:QUARTER_PLANNING_NODE_EXECUTABLE) { $env:QUARTER_PLANNING_NODE_EXECUTABLE } else { "node" }
 $layoutJson = & $nodeExecutable (Join-Path $PSScriptRoot "print_workbook_layout.mjs")
@@ -42,6 +43,19 @@ function Assert-TextEquals([string]$Actual, [string]$Expected, [string]$Context)
     if ($Actual -ne $Expected) {
         throw "$Context is '$Actual', expected '$Expected'"
     }
+}
+
+function Get-ClipboardPlainText {
+    $lastError = $null
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
+        try {
+            return [System.Windows.Forms.Clipboard]::GetText()
+        } catch {
+            $lastError = $_.Exception
+            Start-Sleep -Milliseconds 100
+        }
+    }
+    throw "Could not read the Windows plain-text clipboard: $($lastError.Message)"
 }
 
 function Assert-NumberClose([double]$Actual, [double]$Expected, [string]$Context, [double]$Tolerance = 0.01) {
@@ -207,6 +221,7 @@ try {
         "RunQuarterPlanRecalculate",
         "RunQuarterPlanCellAction",
         "RunQuarterPlanRepairActionButtons",
+        "RunCopyJql",
         "RunTaskEstimateRepairActionButtons"
     )
     $allCode = ""
@@ -446,6 +461,7 @@ try {
     $estimateSheet.Range("H1").Value2 = "broken statistics"
     $excel.Run("RunTaskEstimateRefresh")
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertTaskEstimateUnicodeTextForTest")
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlTextForTest")
     $expectedTaskHeaders = @("Приоритет", "Направление", "Описание", "ЗНИ/Jira", "Примечание", "AN", "BE", "FE", "QA", "Комментарий", "Экспорт")
     for ($col = 1; $col -le $expectedTaskHeaders.Count; $col++) {
         Assert-TextEquals ([string]$estimateTable.HeaderRowRange.Cells(1, $col).Text) ([string]$expectedTaskHeaders[$col - 1]) "Restored sheet 03 header $col"
@@ -459,6 +475,7 @@ try {
         "btnTaskExportXlsx" = "RunTaskEstimateExportXlsx"
         "btnTaskImportXlsx" = "RunTaskEstimateImportXlsx"
         "btnTaskImportCsv" = "RunTaskEstimateImportCsv"
+        "btnJql03" = "RunCopyJql"
         "tea_01_1" = "RunTaskEstimateCellAction"
         "tea_01_13" = "RunTaskEstimateExpressExport"
         "tea_01_14" = "RunTaskEstimateCellAction"
@@ -478,6 +495,7 @@ try {
         "btnTaskExportXlsx" = "Экспорт"
         "btnTaskImportXlsx" = "Импорт"
         "btnTaskImportCsv" = "Импорт CSV (до $($workbookLayout.limits.taskRows))"
+        "btnJql03" = "JQL"
         "tea_01_1" = ">"
         "tea_01_13" = "Экспорт"
         "tea_01_14" = "+"
@@ -488,6 +506,7 @@ try {
         Assert-TextEquals ([string]$shape.TextFrame.Characters().Text) $expectedCaption "$shapeName caption"
         Assert-TextEquals ([string]$shape.TopLeftCell.Text) $expectedCaption "$shapeName anchor cell caption"
     }
+    Assert-TextEquals ([string]$estimateSheet.Shapes.Item("btnJql03").TopLeftCell.Address($false, $false)) ([string]$workbookLayout.taskEstimates.jqlActionCell) "btnJql03 button anchor"
     Write-Pass "COM sheet 03 Unicode-safe rebuild and action buttons"
 
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertTaskEstimateCommentOptionsForTest")
@@ -830,12 +849,18 @@ try {
         "btnQuarterPlanRecalculate" = "RunQuarterPlanRecalculate"
         "btnQuarterPlanExportBacklog" = "RunQuarterPlanExportBacklog"
         "btnQuarterPlanAddAllBacklog" = "RunQuarterPlanAddAllBacklogToPlan"
+        "btnJqlA" = "RunCopyJql"
+        "btnJqlG" = "RunCopyJql"
+        "btnJqlB" = "RunCopyJql"
     }
     $expectedAnchors = @{
         "btnQuarterPlanReloadBacklog" = "G2"
         "btnQuarterPlanRecalculate" = "P2"
         "btnQuarterPlanExportBacklog" = "Q2"
         "btnQuarterPlanAddAllBacklog" = [string]$workbookLayout.backlog.actionCell
+        "btnJqlA" = [string]$workbookLayout.activePlan.jqlActionCell
+        "btnJqlG" = [string]$workbookLayout.greyZone.jqlActionCell
+        "btnJqlB" = [string]$workbookLayout.backlog.jqlActionCell
     }
     foreach ($shapeName in $expectedActions.Keys) {
         $shape = $planSheet.Shapes.Item($shapeName)
@@ -847,6 +872,9 @@ try {
         Assert-TextEquals ([string]$shape.TopLeftCell.Address($false, $false)) $expectedAnchors[$shapeName] "$shapeName button anchor"
         if ($shapeName -eq "btnQuarterPlanExportBacklog") {
             Assert-TextEquals ([string]$shape.TextFrame.Characters().Text) "Экспорт плана" "Export plan button caption"
+        }
+        if ($shapeName -in @("btnJqlA", "btnJqlG", "btnJqlB")) {
+            Assert-TextEquals ([string]$shape.TextFrame.Characters().Text) "JQL" "$shapeName button caption"
         }
         Assert-ActionShapeDesign $shape $shapeName
     }
@@ -919,6 +947,53 @@ try {
         [System.Runtime.InteropServices.Marshal]::ReleaseComObject($backlogExportWorkbook) | Out-Null
     }
     Write-Pass "COM sheet 04 active plan export"
+
+    $estimateTable.ListColumns("ЗНИ/Jira").DataBodyRange.ClearContents()
+    $estimateLevelRange = $estimateSheet.Range(
+        $estimateSheet.Cells([int]$workbookLayout.taskEstimates.dataStartRow, 30),
+        $estimateSheet.Cells([int]$workbookLayout.taskEstimates.dataEndRow, 30)
+    )
+    $estimateLevelRange.ClearContents()
+    $estimateTable.DataBodyRange.Cells(1, 4).Value2 = " ROOT-1 "
+    $estimateTable.DataBodyRange.Cells(2, 4).Value2 = "CHILD-1"
+    $estimateTable.DataBodyRange.Cells(3, 4).Value2 = "root-1"
+    $estimateTable.DataBodyRange.Cells(4, 4).Value2 = "ROOT-2"
+    $estimateSheet.Cells([int]$workbookLayout.taskEstimates.dataStartRow, 30).Value2 = 0
+    $estimateSheet.Cells([int]$workbookLayout.taskEstimates.dataStartRow + 1, 30).Value2 = 1
+    $estimateSheet.Cells([int]$workbookLayout.taskEstimates.dataStartRow + 2, 30).Value2 = 0
+    $estimateSheet.Cells([int]$workbookLayout.taskEstimates.dataStartRow + 3, 30).Value2 = 0
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlForTableNameForTest", "tblTaskEstimates", "issuekey in (ROOT-1, ROOT-2)")
+
+    $activeTable.ListColumns("ЗНИ/Jira").DataBodyRange.ClearContents()
+    $greyTableForLayout.ListColumns("ЗНИ/Jira").DataBodyRange.ClearContents()
+    $backlogTable.ListColumns("ЗНИ/Jira").DataBodyRange.ClearContents()
+    $activeTable.DataBodyRange.Cells(1, 9).Value2 = " PLAN-1 "
+    $activeTable.DataBodyRange.Cells(2, 9).Value2 = "plan-1"
+    $activeTable.DataBodyRange.Cells(3, 9).Value2 = "PLAN-2"
+    $greyTableForLayout.DataBodyRange.Cells(1, 9).Value2 = "GREY-1"
+    $backlogTable.DataBodyRange.Cells(1, 9).Value2 = "BACK-1"
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlForTableNameForTest", "tblPlanActive", "issuekey in (PLAN-1, PLAN-2)")
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlForTableNameForTest", "tblPlanGrey", "issuekey in (GREY-1)")
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlForTableNameForTest", "tblPlanBacklog", "issuekey in (BACK-1)")
+    Write-Pass "COM JQL generation"
+
+    $referencesSheet = $workbook.Worksheets.Item("99_Справочники")
+    $jqlClipboardCell = $referencesSheet.Range([string]$workbookLayout.references.jqlClipboardCell)
+    $jqlClipboardCell.EntireColumn.Hidden = $true
+    $workbook.Saved = $true
+    $savedBeforeJqlCopy = [bool]$workbook.Saved
+    $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.CopyJqlForTableNameForTest", "tblPlanActive")
+    Start-Sleep -Milliseconds 300
+    Assert-TextEquals ([string]$jqlClipboardCell.Value2) "issuekey in (PLAN-1, PLAN-2)" "JQL staging cell"
+    if ([bool]$jqlClipboardCell.EntireColumn.Hidden) {
+        throw "JQL staging column remained hidden, so external applications receive an empty plain-text clipboard value"
+    }
+    $plainClipboardText = (Get-ClipboardPlainText) -replace "(`r`n|`n|`r)+$", ""
+    Assert-TextEquals $plainClipboardText "issuekey in (PLAN-1, PLAN-2)" "Windows plain-text clipboard"
+    if ([bool]$workbook.Saved -ne $savedBeforeJqlCopy) {
+        throw "JQL copy changed ThisWorkbook.Saved"
+    }
+    Write-Pass "COM JQL external plain-text clipboard"
 
     foreach ($sheet in @($workbook.Worksheets)) {
         foreach ($shape in @($sheet.Shapes)) {

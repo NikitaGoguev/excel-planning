@@ -7,6 +7,7 @@
     { "name": "QuarterPlanTaskEstimates", "type": "standard", "source": "assets/vba/QuarterPlanTaskEstimates_module.txt" },
     { "name": "QuarterPlanImportExport", "type": "standard", "source": "assets/vba/QuarterPlanImportExport_module.txt" },
     { "name": "QuarterPlanPlanActions", "type": "standard", "source": "assets/vba/QuarterPlanPlanActions_module.txt" },
+    { "name": "QuarterPlanJql", "type": "standard", "source": "assets/vba/QuarterPlanJql_module.txt" },
     { "name": "QuarterPlanScheduler", "type": "standard", "source": "assets/vba/QuarterPlanScheduler_module.txt" },
     { "name": "QuarterPlanLimits", "type": "standard", "source": "assets/vba/QuarterPlanLimits_module.txt", "generated": true },
     { "name": "QuarterPlanActions", "type": "standard", "source": "assets/vba/QuarterPlanActions_module.txt" },
@@ -20,6 +21,7 @@
     "RunQuarterPlanCellAction",
     "RunQuarterPlanAddAllBacklogToPlan",
     "RunQuarterPlanRepairActionButtons",
+    "RunCopyJql",
     "RunTaskEstimateCellAction",
     "RunTaskEstimateExpressExport",
     "RunTaskEstimateRepairActionButtons",
@@ -90,6 +92,10 @@
     {
       "name": "Raw Cyrillic sheet 03 comment-options helper literal",
       "pattern": "TaskEstimateText(?:CommentOptionsTitle|Ok|Cancel|NoCommentOptions)\\s*=\\s*\""
+    },
+    {
+      "name": "Raw Cyrillic JQL dialog helper literal",
+      "pattern": "JqlText(?:CopiedPrefix|NoKeys|TooLong)\\s*=\\s*\""
     },
     {
       "name": "Raw Cyrillic sheet 03 CSV import caption literal",
