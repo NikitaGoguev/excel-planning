@@ -65,9 +65,9 @@ try {
     $excel.Run("RunQuarterPlanRecalculate")
     $excel.CalculateFull()
 
-    Export-RangePng $workbook.Worksheets.Item("00_Настройки") "A1:L34" "settings.png"
-    Export-RangePng $workbook.Worksheets.Item("03_Оценка задач") "A1:N14" "estimates.png"
-    Export-RangePng $workbook.Worksheets.Item("04_Квартальный план") "A1:S16" "plan.png"
+    Export-RangePng $workbook.Worksheets.Item("00_Настройки") "A1:L35" "settings.png"
+    Export-RangePng $workbook.Worksheets.Item("03_Оценка задач") "A1:O14" "estimates.png"
+    Export-RangePng $workbook.Worksheets.Item("04_Квартальный план") "A1:T16" "plan.png"
 } finally {
     if ($workbook -ne $null) {
         $workbook.Close($false)

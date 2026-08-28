@@ -163,7 +163,7 @@ Public Sub WriteTaskEstimateParentFormulas(ByVal tbl As ListObject, ByVal rowInd
     previousAutoFill = Application.AutoCorrect.AutoFillFormulasInLists
     Application.AutoCorrect.AutoFillFormulasInLists = False
 
-    For col = EST_COL_AN To EST_COL_QA
+    For col = EST_COL_DE To EST_COL_QA
         WriteTaskEstimateParentFormula tbl, rowIndex, col
     Next col
 
@@ -201,7 +201,7 @@ Public Sub ApplyTaskEstimateCalculatedStyle(ByVal tbl As ListObject, ByVal rowIn
     Dim estimateRange As Range
 
     Set estimateRange = tbl.Parent.Range( _
-        tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN), _
+        tbl.DataBodyRange.Cells(rowIndex, EST_COL_DE), _
         tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA))
     With estimateRange
         .Interior.Color = RGB(217, 217, 217)
@@ -220,7 +220,7 @@ Public Sub ApplyTaskEstimateInputStyle(ByVal tbl As ListObject, ByVal rowIndex A
     Dim estimateRange As Range
 
     Set estimateRange = tbl.Parent.Range( _
-        tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN), _
+        tbl.DataBodyRange.Cells(rowIndex, EST_COL_DE), _
         tbl.DataBodyRange.Cells(rowIndex, EST_COL_QA))
     With estimateRange
         .Interior.Color = RGB(255, 242, 204)
@@ -281,7 +281,7 @@ Public Sub DecomposeTaskEstimateRow(ByVal tbl As ListObject, ByVal rowIndex As L
     For col = EST_COL_PRIORITY To EST_COL_NOTE
         tbl.DataBodyRange.Cells(insertRowIndex, col).Value = tbl.DataBodyRange.Cells(rowIndex, col).Value
     Next col
-    For col = EST_COL_AN To EST_COL_QA
+    For col = EST_COL_DE To EST_COL_QA
         If hadChildren Then
             tbl.DataBodyRange.Cells(insertRowIndex, col).ClearContents
         Else
@@ -304,6 +304,7 @@ Public Sub DeleteTaskEstimateDecomposition(ByVal tbl As ListObject, ByVal rowInd
     Dim lastDescendantRow As Long
     Dim deleteCount As Long
     Dim deleteLastRow As Long
+    Dim deSum As Double
     Dim anSum As Double
     Dim beSum As Double
     Dim feSum As Double
@@ -327,7 +328,7 @@ Public Sub DeleteTaskEstimateDecomposition(ByVal tbl As ListObject, ByVal rowInd
     If deleteChoice = TASK_DELETE_CHOICE_PROMPT Then Exit Sub
     If deleteChoice < TASK_DELETE_CHOICE_DROP Or deleteChoice > TASK_DELETE_CHOICE_DOWN Then Err.Raise 5, , "Unsupported delete choice: " & CStr(deleteChoice)
 
-    SumTaskEstimateDeleteEstimates tbl, rowIndex, anSum, beSum, feSum, qaSum
+    SumTaskEstimateDeleteEstimates tbl, rowIndex, deSum, anSum, beSum, feSum, qaSum
 
     If deleteChoice <> TASK_DELETE_CHOICE_DROP Then
         transferRowIndex = FindTaskEstimateSiblingRow(tbl, rowIndex, deleteChoice)
@@ -342,7 +343,7 @@ Public Sub DeleteTaskEstimateDecomposition(ByVal tbl As ListObject, ByVal rowInd
 
         writableRowIndex = ResolveTaskEstimateWritableTransferRow(tbl, transferRowIndex, deleteChoice, rowIndex, deleteLastRow)
         If writableRowIndex > 0 Then
-            AddTaskEstimateSumsToRow tbl, writableRowIndex, anSum, beSum, feSum, qaSum
+            AddTaskEstimateSumsToRow tbl, writableRowIndex, deSum, anSum, beSum, feSum, qaSum
         Else
             writeToParentAfterDelete = True
         End If
@@ -351,7 +352,7 @@ Public Sub DeleteTaskEstimateDecomposition(ByVal tbl As ListObject, ByVal rowInd
     DeleteTaskEstimateRows tbl, rowIndex, deleteCount
 
     If writeToParentAfterDelete Then
-        AddTaskEstimateSumsToRow tbl, AdjustTaskEstimateRowAfterDelete(transferRowIndex, rowIndex, deleteCount), anSum, beSum, feSum, qaSum
+        AddTaskEstimateSumsToRow tbl, AdjustTaskEstimateRowAfterDelete(transferRowIndex, rowIndex, deleteCount), deSum, anSum, beSum, feSum, qaSum
     End If
 
 End Sub
@@ -384,10 +385,11 @@ Public Function PromptTaskEstimateDeleteChoice(ByVal tbl As ListObject, ByVal ro
     Loop
 End Function
 
-Public Sub SumTaskEstimateDeleteEstimates(ByVal tbl As ListObject, ByVal rowIndex As Long, ByRef anSum As Double, ByRef beSum As Double, ByRef feSum As Double, ByRef qaSum As Double)
+Public Sub SumTaskEstimateDeleteEstimates(ByVal tbl As ListObject, ByVal rowIndex As Long, ByRef deSum As Double, ByRef anSum As Double, ByRef beSum As Double, ByRef feSum As Double, ByRef qaSum As Double)
     If TaskEstimateRowHasChildren(tbl, rowIndex) Then
-        SumTaskEstimateLeafEstimates tbl, rowIndex, anSum, beSum, feSum, qaSum
+        SumTaskEstimateLeafEstimates tbl, rowIndex, deSum, anSum, beSum, feSum, qaSum
     Else
+        deSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_DE).Value)
         anSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN).Value)
         beSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE).Value)
         feSum = NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE).Value)
@@ -496,10 +498,11 @@ Public Function FindTaskEstimateLeafDescendant(ByVal tbl As ListObject, ByVal pa
     End If
 End Function
 
-Public Sub AddTaskEstimateSumsToRow(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal anSum As Double, ByVal beSum As Double, ByVal feSum As Double, ByVal qaSum As Double)
+Public Sub AddTaskEstimateSumsToRow(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal deSum As Double, ByVal anSum As Double, ByVal beSum As Double, ByVal feSum As Double, ByVal qaSum As Double)
     If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Err.Raise 9, , "Transfer target row is outside task estimate table."
     If TaskEstimateRowHasChildren(tbl, rowIndex) Then Err.Raise 5, , "Cannot write transferred estimates directly into a parent formula row."
 
+    WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_DE), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_DE).Value) + deSum
     WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN).Value) + anSum
     WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE).Value) + beSum
     WriteEstimateNumber tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE), NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE).Value) + feSum
@@ -605,7 +608,7 @@ Public Function TaskEstimateRowHasTask(ByVal tbl As ListObject, ByVal rowIndex A
     If tbl.DataBodyRange Is Nothing Then Exit Function
     If rowIndex < 1 Or rowIndex > tbl.DataBodyRange.Rows.Count Then Exit Function
 
-    For Each col In Array(EST_COL_PRIORITY, EST_COL_DIRECTION, EST_COL_DESCRIPTION, EST_COL_TICKET, EST_COL_NOTE, EST_COL_AN, EST_COL_BE, EST_COL_FE, EST_COL_QA)
+    For Each col In Array(EST_COL_PRIORITY, EST_COL_DIRECTION, EST_COL_DESCRIPTION, EST_COL_TICKET, EST_COL_NOTE, EST_COL_DE, EST_COL_AN, EST_COL_BE, EST_COL_FE, EST_COL_QA)
         valueText = Trim$(CStr(tbl.DataBodyRange.Cells(rowIndex, CLng(col)).Value))
         If valueText <> "" Then
             TaskEstimateRowHasTask = True
@@ -706,13 +709,14 @@ Public Function LastTaskEstimateDescendantRow(ByVal tbl As ListObject, ByVal row
     Next scanRow
 End Function
 
-Public Sub SumTaskEstimateLeafEstimates(ByVal tbl As ListObject, ByVal rootRowIndex As Long, ByRef anSum As Double, ByRef beSum As Double, ByRef feSum As Double, ByRef qaSum As Double)
+Public Sub SumTaskEstimateLeafEstimates(ByVal tbl As ListObject, ByVal rootRowIndex As Long, ByRef deSum As Double, ByRef anSum As Double, ByRef beSum As Double, ByRef feSum As Double, ByRef qaSum As Double)
     Dim lastDescendantRow As Long
     Dim rowIndex As Long
 
     lastDescendantRow = LastTaskEstimateDescendantRow(tbl, rootRowIndex)
     For rowIndex = rootRowIndex + 1 To lastDescendantRow
         If TaskEstimateRowHasTask(tbl, rowIndex) And Not TaskEstimateRowHasChildren(tbl, rowIndex) Then
+            deSum = deSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_DE).Value)
             anSum = anSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_AN).Value)
             beSum = beSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_BE).Value)
             feSum = feSum + NzDouble(tbl.DataBodyRange.Cells(rowIndex, EST_COL_FE).Value)
@@ -722,14 +726,17 @@ Public Sub SumTaskEstimateLeafEstimates(ByVal tbl As ListObject, ByVal rootRowIn
 End Sub
 
 Public Function EffectiveTaskEstimateValue(ByVal tbl As ListObject, ByVal rowIndex As Long, ByVal estimateCol As Long) As Double
+    Dim deSum As Double
     Dim anSum As Double
     Dim beSum As Double
     Dim feSum As Double
     Dim qaSum As Double
 
     If TaskEstimateRowHasChildren(tbl, rowIndex) Then
-        SumTaskEstimateLeafEstimates tbl, rowIndex, anSum, beSum, feSum, qaSum
+        SumTaskEstimateLeafEstimates tbl, rowIndex, deSum, anSum, beSum, feSum, qaSum
         Select Case estimateCol
+            Case EST_COL_DE
+                EffectiveTaskEstimateValue = deSum
             Case EST_COL_AN
                 EffectiveTaskEstimateValue = anSum
             Case EST_COL_BE

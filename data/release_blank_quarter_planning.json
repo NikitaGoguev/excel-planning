@@ -14,9 +14,10 @@
     { "role": "Аналитик", "count": 0, "comment": "" },
     { "role": "Разработчик бэкенд", "count": 0, "comment": "" },
     { "role": "Разработчик фронтенд", "count": 0, "comment": "" },
-    { "role": "Тестировщик", "count": 0, "comment": "" }
+    { "role": "Тестировщик", "count": 0, "comment": "" },
+    { "role": "Дизайнер", "count": 0, "comment": "" }
   ],
-  "capacity": { "coreTeamFocusFactor": 0.7, "teamLeadFocusFactor": 0.5, "analysisLeadFocusFactor": 0.5 },
+  "capacity": { "coreTeamFocusFactor": 0.7, "teamLeadFocusFactor": 0.5, "analysisLeadFocusFactor": 0.5, "designFocusFactor": 0.7 },
   "taskCommentOptions": {
     "artifacts": ["Бизнес-требования", "Макеты интерфейсов", "Архитектурное решение", "Проверка ИБ"],
     "adjacentTeams": ["Команда Альфа", "Команда Бета", "Команда Гамма", "Команда Дельта", "Команда Эпсилон", "Команда Дзета", "Платформа 1", "Интеграции", "Поддержка"]

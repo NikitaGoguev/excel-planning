@@ -68,8 +68,8 @@ End Function
 
 Public Sub ApplyQuarterPlanDateFormats(ByVal ws As Worksheet)
     ws.Columns(PLAN_TECH_FIRST_COL_LETTER & ":" & PLAN_TECH_LAST_COL_LETTER).Hidden = False
-    ApplyDateFormat ws.Range("P:P")
-    ApplyDateFormat ws.Range("X:AE")
+    ApplyDateFormat ws.Range("Q:Q")
+    ApplyDateFormat ws.Range("Z:AI")
 End Sub
 
 Public Sub RebuildTaskEstimateActionUi()
@@ -274,11 +274,10 @@ Public Sub RestoreTaskEstimateTemplateHeader(ByVal ws As Worksheet)
     Dim index As Long
 
     headers = Array(">", "x", TaskEstimateHeaderPriority(), TaskEstimateHeaderDirection(), TaskEstimateHeaderDescription(), _
-        TaskEstimateHeaderTicket(), TaskEstimateHeaderNote(), "AN", "BE", "FE", "QA", TaskEstimateHeaderComment(), TaskEstimateTextExportXlsx())
+        TaskEstimateHeaderTicket(), TaskEstimateHeaderNote(), "DE", "AN", "BE", "FE", "QA", TaskEstimateHeaderComment(), "+", TaskEstimateTextExportXlsx())
     For index = LBound(headers) To UBound(headers)
         ws.Cells(QP_TASK_HEADER_ROW, index + 1).Value = headers(index)
     Next index
-    ws.Cells(QP_TASK_HEADER_ROW, EST_SHEET_COL_ACTION_COMMENT_OPTIONS).Value = "+"
 End Sub
 
 Public Sub RestoreTaskEstimateTemplateStyles(ByVal ws As Worksheet, ByVal tbl As ListObject)
@@ -286,9 +285,9 @@ Public Sub RestoreTaskEstimateTemplateStyles(ByVal ws As Worksheet, ByVal tbl As
     Dim actionRange As Range
     Dim inputRange As Range
 
-    Set headerRange = ws.Range("A" & QP_TASK_HEADER_ROW & ":N" & QP_TASK_HEADER_ROW)
-    Set actionRange = Union(ws.Range("A" & QP_TASK_FIRST_ROW & ":B" & QP_TASK_LAST_ROW), ws.Range("M" & QP_TASK_FIRST_ROW & ":N" & QP_TASK_LAST_ROW))
-    Set inputRange = ws.Range("C" & QP_TASK_FIRST_ROW & ":L" & QP_TASK_LAST_ROW)
+    Set headerRange = ws.Range("A" & QP_TASK_HEADER_ROW & ":O" & QP_TASK_HEADER_ROW)
+    Set actionRange = Union(ws.Range("A" & QP_TASK_FIRST_ROW & ":B" & QP_TASK_LAST_ROW), ws.Range("N" & QP_TASK_FIRST_ROW & ":O" & QP_TASK_LAST_ROW))
+    Set inputRange = ws.Range("C" & QP_TASK_FIRST_ROW & ":M" & QP_TASK_LAST_ROW)
 
     With headerRange
         .Interior.Color = RGB(217, 234, 247)
@@ -330,7 +329,7 @@ Public Sub RestoreTaskEstimateTemplateStyles(ByVal ws As Worksheet, ByVal tbl As
     End With
 
     ws.Range("C" & QP_TASK_FIRST_ROW & ":C" & QP_TASK_LAST_ROW).NumberFormat = "0"
-    ws.Range("H" & QP_TASK_FIRST_ROW & ":K" & QP_TASK_LAST_ROW).NumberFormat = "0.00"
+    ws.Range("H" & QP_TASK_FIRST_ROW & ":L" & QP_TASK_LAST_ROW).NumberFormat = "0.00"
 End Sub
 
 Public Sub RestoreTaskEstimateTemplateValidation(ByVal ws As Worksheet)
@@ -340,7 +339,7 @@ Public Sub RestoreTaskEstimateTemplateValidation(ByVal ws As Worksheet)
         .IgnoreBlank = True
     End With
 
-    With ws.Range("H" & QP_TASK_FIRST_ROW & ":K" & QP_TASK_LAST_ROW).Validation
+    With ws.Range("H" & QP_TASK_FIRST_ROW & ":L" & QP_TASK_LAST_ROW).Validation
         .Delete
         .Add Type:=xlValidateDecimal, AlertStyle:=xlValidAlertStop, Operator:=xlGreaterEqual, Formula1:="0"
         .IgnoreBlank = True
@@ -348,12 +347,15 @@ Public Sub RestoreTaskEstimateTemplateValidation(ByVal ws As Worksheet)
 End Sub
 
 Public Sub RestoreTaskEstimateTemplateStats(ByVal ws As Worksheet)
+    ws.Range("H1:L1").UnMerge
+    ws.Range("H1:L1").Merge
     ws.Range("H1").Value = TaskEstimateTextStatistics()
     ws.Range("H2").Formula = "=SUM(H" & QP_TASK_FIRST_ROW & ":H" & QP_TASK_LAST_ROW & ")"
     ws.Range("I2").Formula = "=SUM(I" & QP_TASK_FIRST_ROW & ":I" & QP_TASK_LAST_ROW & ")"
     ws.Range("J2").Formula = "=SUM(J" & QP_TASK_FIRST_ROW & ":J" & QP_TASK_LAST_ROW & ")"
     ws.Range("K2").Formula = "=SUM(K" & QP_TASK_FIRST_ROW & ":K" & QP_TASK_LAST_ROW & ")"
-    ws.Range("H2:K2").NumberFormat = "0.00"
+    ws.Range("L2").Formula = "=SUM(L" & QP_TASK_FIRST_ROW & ":L" & QP_TASK_LAST_ROW & ")"
+    ws.Range("H2:L2").NumberFormat = "0.00"
 End Sub
 
 Public Sub AddTaskEstimateShapeButtons(ByVal ws As Worksheet)
@@ -587,8 +589,8 @@ End Sub
 
 Public Sub AddQuarterPlanShapeButtons(ByVal ws As Worksheet)
     AddQuarterPlanButton ws, "btnQuarterPlanReloadBacklog", ws.Range("G2"), QuarterPlanButtonCaption(ws.Range("G2"), QuarterPlanTextReloadBacklog()), "RunQuarterPlanReloadBacklog"
-    AddQuarterPlanButton ws, "btnQuarterPlanRecalculate", ws.Range("P2"), QuarterPlanButtonCaption(ws.Range("P2"), QuarterPlanTextRecalculatePlan()), "RunQuarterPlanRecalculate"
-    AddQuarterPlanButton ws, "btnQuarterPlanExportBacklog", ws.Range("Q2"), QuarterPlanButtonCaption(ws.Range("Q2"), QuarterPlanTextExportBacklog()), "RunQuarterPlanExportBacklog"
+    AddQuarterPlanButton ws, "btnQuarterPlanRecalculate", ws.Range("Q2"), QuarterPlanButtonCaption(ws.Range("Q2"), QuarterPlanTextRecalculatePlan()), "RunQuarterPlanRecalculate"
+    AddQuarterPlanButton ws, "btnQuarterPlanExportBacklog", ws.Range("R2"), QuarterPlanButtonCaption(ws.Range("R2"), QuarterPlanTextExportBacklog()), "RunQuarterPlanExportBacklog"
     AddQuarterPlanButton ws, "btnQuarterPlanAddAllBacklog", ws.Range(QP_BACKLOG_ACTION_CELL), QuarterPlanTextAddAllToPlan(), "RunQuarterPlanAddAllBacklogToPlan"
     AddQuarterPlanButton ws, JQL_ACTIVE_SHAPE_NAME, ws.Range(QP_ACTIVE_PLAN_JQL_ACTION_CELL), "JQL", "RunCopyJql"
     AddQuarterPlanButton ws, JQL_GREY_SHAPE_NAME, ws.Range(QP_GREY_ZONE_JQL_ACTION_CELL), "JQL", "RunCopyJql"
@@ -804,7 +806,7 @@ Public Sub AddQuarterPlanRecalculateLink(ByVal ws As Worksheet)
     On Error GoTo SafeExit
 
     Dim cell As Range
-    Set cell = ws.Range("P2")
+    Set cell = ws.Range("Q2")
 
     cell.Hyperlinks.Delete
     cell.Value = QuarterPlanTextRecalculatePlan()
@@ -824,7 +826,7 @@ Public Sub AddQuarterPlanExportBacklogLink(ByVal ws As Worksheet)
     On Error GoTo SafeExit
 
     Dim cell As Range
-    Set cell = ws.Range("Q2")
+    Set cell = ws.Range("R2")
 
     cell.Hyperlinks.Delete
     cell.Value = QuarterPlanTextExportBacklog()

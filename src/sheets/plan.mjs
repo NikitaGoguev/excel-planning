@@ -19,6 +19,7 @@ export function buildPlanSheet(context) {
     "Описание",
     "ЗНИ/Jira",
     "Примечание",
+    "DE",
     "AN",
     "BE",
     "FE",
@@ -31,10 +32,13 @@ export function buildPlanSheet(context) {
   ];
 
   const planTechHeaders = [
+    "DE дни",
     "AN дни",
     "BE дни",
     "FE дни",
     "QA дни",
+    "DE старт",
+    "DE финиш",
     "AN старт",
     "AN финиш",
     "BE старт",
@@ -47,8 +51,9 @@ export function buildPlanSheet(context) {
   ];
 
   function plannedEffortFormula(row) {
-    const factor = "'02_Capacity'!$E$20";
-    return `=IF(COUNTA(G${row}:N${row})=0,"",IFERROR(IF(K${row}="",0,CEILING(K${row}/${factor},1))+IF(L${row}="",0,CEILING(L${row}/${factor},1))+IF(M${row}="",0,CEILING(M${row}/${factor},1))+IF(N${row}="",0,CEILING(N${row}/${factor},1)),""))`;
+    const coreFactor = "'02_Capacity'!$E$20";
+    const designFactor = "'02_Capacity'!$E$25";
+    return `=IF(COUNTA(G${row}:O${row})=0,"",IFERROR(IF(K${row}="",0,CEILING(K${row}/${designFactor},1))+IF(L${row}="",0,CEILING(L${row}/${coreFactor},1))+IF(M${row}="",0,CEILING(M${row}/${coreFactor},1))+IF(N${row}="",0,CEILING(N${row}/${coreFactor},1))+IF(O${row}="",0,CEILING(O${row}/${coreFactor},1)),""))`;
   }
 
   function emptyPlanRow() {
@@ -67,6 +72,7 @@ export function buildPlanSheet(context) {
       task.description ?? "",
       task.ticket ?? "",
       task.note ?? "",
+      task.DE ?? "",
       task.AN ?? "",
       task.BE ?? "",
       task.FE ?? "",
@@ -99,28 +105,28 @@ export function buildPlanSheet(context) {
     applyHeader(plan.getRange(headerRange));
     applyAction(plan.getRange(`A${dataStartRow}:E${dataEndRow}`));
     applyInput(plan.getRange(`F${dataStartRow}:J${dataEndRow}`));
-    applyInput(plan.getRange(`K${dataStartRow}:N${dataEndRow}`));
-    applyCalculated(plan.getRange(`O${dataStartRow}:P${dataEndRow}`));
-    applyInput(plan.getRange(`Q${dataStartRow}:S${dataEndRow}`));
-    plan.getRange(`A${dataStartRow}:AF${dataEndRow}`).format.wrapText = false;
+    applyInput(plan.getRange(`K${dataStartRow}:O${dataEndRow}`));
+    applyCalculated(plan.getRange(`P${dataStartRow}:Q${dataEndRow}`));
+    applyInput(plan.getRange(`R${dataStartRow}:T${dataEndRow}`));
+    plan.getRange(`A${dataStartRow}:AJ${dataEndRow}`).format.wrapText = false;
     plan.getRange(`F${dataStartRow}:F${dataEndRow}`).setNumberFormat("0");
-    plan.getRange(`K${dataStartRow}:O${dataEndRow}`).setNumberFormat("0.00");
-    plan.getRange(`P${dataStartRow}:P${dataEndRow}`).setNumberFormat(EXCEL_DATE_FORMAT);
-    plan.getRange(`O${dataStartRow}:O${dataEndRow}`).formulas = Array.from(
+    plan.getRange(`K${dataStartRow}:P${dataEndRow}`).setNumberFormat("0.00");
+    plan.getRange(`Q${dataStartRow}:Q${dataEndRow}`).setNumberFormat(EXCEL_DATE_FORMAT);
+    plan.getRange(`P${dataStartRow}:P${dataEndRow}`).formulas = Array.from(
       { length: dataEndRow - dataStartRow + 1 },
       (_, index) => {
         const row = dataStartRow + index;
         return [plannedEffortFormula(row)];
       },
     );
-    plan.getRange(`T${dataStartRow - 1}:AF${dataStartRow - 1}`).values = [planTechHeaders];
-    applyHeader(plan.getRange(`T${dataStartRow - 1}:AF${dataStartRow - 1}`));
-    applyCalculated(plan.getRange(`T${dataStartRow}:AF${dataEndRow}`));
-    plan.getRange(`T${dataStartRow}:W${dataEndRow}`).setNumberFormat("0.00");
-    plan.getRange(`X${dataStartRow}:AE${dataEndRow}`).setNumberFormat(EXCEL_DATE_FORMAT);
+    plan.getRange(`U${dataStartRow - 1}:AJ${dataStartRow - 1}`).values = [planTechHeaders];
+    applyHeader(plan.getRange(`U${dataStartRow - 1}:AJ${dataStartRow - 1}`));
+    applyCalculated(plan.getRange(`U${dataStartRow}:AJ${dataEndRow}`));
+    plan.getRange(`U${dataStartRow}:Y${dataEndRow}`).setNumberFormat("0.00");
+    plan.getRange(`Z${dataStartRow}:AI${dataEndRow}`).setNumberFormat(EXCEL_DATE_FORMAT);
     addWholeValidation(plan.getRange(`F${dataStartRow}:F${dataEndRow}`), 1, 999);
-    addNonNegativeValidation(plan.getRange(`K${dataStartRow}:N${dataEndRow}`));
-    addListValidation(plan.getRange(`R${dataStartRow}:R${dataEndRow}`), quarterPlanStatuses);
+    addNonNegativeValidation(plan.getRange(`K${dataStartRow}:O${dataEndRow}`));
+    addListValidation(plan.getRange(`S${dataStartRow}:S${dataEndRow}`), quarterPlanStatuses);
     addTable(plan, tableRange, tableName);
   }
 
@@ -128,7 +134,7 @@ export function buildPlanSheet(context) {
     "Квартальный план",
     layout.activePlan.titleRange,
     layout.activePlan.tableRange,
-    `A${layout.activePlan.headerRow}:S${layout.activePlan.headerRow}`,
+    `A${layout.activePlan.headerRow}:T${layout.activePlan.headerRow}`,
     layout.activePlan.dataStartRow,
     layout.activePlan.dataEndRow,
     "tblPlanActive",
@@ -138,7 +144,7 @@ export function buildPlanSheet(context) {
     "Серая зона",
     layout.greyZone.titleRange,
     layout.greyZone.tableRange,
-    `A${layout.greyZone.headerRow}:S${layout.greyZone.headerRow}`,
+    `A${layout.greyZone.headerRow}:T${layout.greyZone.headerRow}`,
     layout.greyZone.dataStartRow,
     layout.greyZone.dataEndRow,
     "tblPlanGrey",
@@ -148,7 +154,7 @@ export function buildPlanSheet(context) {
     "Бэклог",
     layout.backlog.titleRange,
     layout.backlog.tableRange,
-    `A${layout.backlog.headerRow}:S${layout.backlog.headerRow}`,
+    `A${layout.backlog.headerRow}:T${layout.backlog.headerRow}`,
     layout.backlog.dataStartRow,
     layout.backlog.dataEndRow,
     "tblPlanBacklog",
@@ -174,12 +180,12 @@ export function buildPlanSheet(context) {
     [layout.greyZone.dataStartRow, layout.greyZone.dataEndRow],
     [layout.backlog.dataStartRow, layout.backlog.dataEndRow],
   ]) {
-    addExcludedEstimateFormat(`L${startRow}:N${endRow}`, `$R${startRow}="Готова аналитика"`);
-    addExcludedEstimateFormat(`N${startRow}:N${endRow}`, `$R${startRow}="Готова разработка"`);
-    addExcludedEstimateFormat(`M${startRow}:N${endRow}`, `$R${startRow}="Готова разработка (бэк)"`);
-    addExcludedEstimateFormat(`L${startRow}:L${endRow}`, `$R${startRow}="Готова разработка (фронт)"`);
-    addExcludedEstimateFormat(`N${startRow}:N${endRow}`, `$R${startRow}="Готова разработка (фронт)"`);
-    addExcludedEstimateFormat(`K${startRow}:N${endRow}`, `$R${startRow}="Отложено"`);
+    addExcludedEstimateFormat(`M${startRow}:O${endRow}`, `$S${startRow}="Готова аналитика"`);
+    addExcludedEstimateFormat(`O${startRow}:O${endRow}`, `$S${startRow}="Готова разработка"`);
+    addExcludedEstimateFormat(`N${startRow}:O${endRow}`, `$S${startRow}="Готова разработка (бэк)"`);
+    addExcludedEstimateFormat(`M${startRow}:M${endRow}`, `$S${startRow}="Готова разработка (фронт)"`);
+    addExcludedEstimateFormat(`O${startRow}:O${endRow}`, `$S${startRow}="Готова разработка (фронт)"`);
+    addExcludedEstimateFormat(`K${startRow}:O${endRow}`, `$S${startRow}="Отложено"`);
   }
 
   plan.getRange(`A${layout.activePlan.headerRow}:E${layout.activePlan.headerRow}`).format.horizontalAlignment = "left";
@@ -201,19 +207,19 @@ export function buildPlanSheet(context) {
     L: 52,
     M: 52,
     N: 52,
-    O: 120,
-    P: 113,
-    Q: 130,
-    R: 230,
-    S: 420,
+    O: 52,
+    P: 120,
+    Q: 113,
+    R: 130,
+    S: 230,
+    T: 420,
   });
   setWidths(plan, {
-    T: 70,
     U: 70,
     V: 70,
     W: 70,
-    X: 100,
-    Y: 100,
+    X: 70,
+    Y: 70,
     Z: 100,
   });
   setWidths(plan, {
@@ -222,13 +228,16 @@ export function buildPlanSheet(context) {
     AC: 100,
     AD: 100,
     AE: 100,
-    AF: 260,
+    AF: 100,
+    AG: 100,
+    AH: 100,
+    AI: 100,
+    AJ: 260,
   });
-  plan.getRange("T:AF").format.columnHidden = false;
+  plan.getRange("U:AJ").format.columnHidden = false;
 
-  const refsSheetRef = sheetRef(SHEET_REFS);
   const resourceRiskFormula =
-    `IFERROR(IF(AND(ISNUMBER(${refsSheetRef}!$C$35),${refsSheetRef}!$C$35>=0,${refsSheetRef}!$C$35<=1),${refsSheetRef}!$C$35,0.2),0.2)`;
+    `IFERROR(IF(AND(ISNUMBER(INDEX(tblPlanningRuleSettings[Значение],MATCH("RESOURCE_BALANCE_RISK_PERCENT",tblPlanningRuleSettings[Код],0))),INDEX(tblPlanningRuleSettings[Значение],MATCH("RESOURCE_BALANCE_RISK_PERCENT",tblPlanningRuleSettings[Код],0))>=0,INDEX(tblPlanningRuleSettings[Значение],MATCH("RESOURCE_BALANCE_RISK_PERCENT",tblPlanningRuleSettings[Код],0))<=1),INDEX(tblPlanningRuleSettings[Значение],MATCH("RESOURCE_BALANCE_RISK_PERCENT",tblPlanningRuleSettings[Код],0)),0.2),0.2)`;
 
   function plannedWithRiskExpression(estimateExpression) {
     const riskFactor = `(1+${resourceRiskFormula})`;
@@ -249,6 +258,7 @@ export function buildPlanSheet(context) {
 
   function activePlanEstimateExpression(expertise) {
     const statusColumn = "tblPlanActive[Статус на конец квартала]";
+    if (expertise === "DE") return `SUMIFS(tblPlanActive[DE],${statusColumn},"<>Отложено")`;
     if (expertise === "AN") return `SUMIFS(tblPlanActive[AN],${statusColumn},"<>Отложено")`;
     if (expertise === "BE") {
       return `SUMIFS(tblPlanActive[BE],${statusColumn},"<>Готова аналитика",${statusColumn},"<>Готова разработка (фронт)",${statusColumn},"<>Отложено")`;
@@ -262,7 +272,7 @@ export function buildPlanSheet(context) {
     throw new Error(`Unsupported expertise for balance: ${expertise}`);
   }
 
-  plan.getRange("J2:N4").format = {
+  plan.getRange("J2:O4").format = {
     fill: colors.calculated,
     font: fontStyle({ bold: true, color: colors.text }),
     horizontalAlignment: "center",
@@ -276,17 +286,18 @@ export function buildPlanSheet(context) {
   };
   plan.getRange("J2:J4").values = [["Емкость"], ["План+риск"], ["Баланс"]];
   for (const [column, capacityRef, expertise] of [
-    ["K", "'02_Capacity'!$E$27", "AN"],
-    ["L", "'02_Capacity'!$E$28", "BE"],
-    ["M", "'02_Capacity'!$E$29", "FE"],
-    ["N", "'02_Capacity'!$E$30", "QA"],
+    ["K", "'02_Capacity'!$E$34", "DE"],
+    ["L", "'02_Capacity'!$E$27", "AN"],
+    ["M", "'02_Capacity'!$E$28", "BE"],
+    ["N", "'02_Capacity'!$E$29", "FE"],
+    ["O", "'02_Capacity'!$E$30", "QA"],
   ]) {
     const estimateExpression = activePlanEstimateExpression(expertise);
     plan.getRange(`${column}2`).formulas = [[resourceCapacityFormula(capacityRef)]];
     plan.getRange(`${column}3`).formulas = [[resourcePlannedWithRiskFormula(estimateExpression)]];
     plan.getRange(`${column}4`).formulas = [[resourceBalanceFormula(capacityRef, estimateExpression)]];
   }
-  plan.getRange("K2:N4").setNumberFormat("0.0");
+  plan.getRange("K2:O4").setNumberFormat("0.0");
   plan.getRange(layout.backlog.actionCell).values = [["++"]];
   plan.getRange(layout.backlog.actionCell).format = {
     fill: colors.title,
@@ -312,17 +323,17 @@ export function buildPlanSheet(context) {
     horizontalAlignment: "center",
     verticalAlignment: "center",
   };
-  plan.getRange("P2:P4").merge();
-  plan.getRange("P2").values = [["\u041f\u043e\u0441\u0447\u0438\u0442\u0430\u0442\u044c \u043f\u043b\u0430\u043d"]];
-  plan.getRange("P2:P4").format = {
+  plan.getRange("Q2:Q4").merge();
+  plan.getRange("Q2").values = [["\u041f\u043e\u0441\u0447\u0438\u0442\u0430\u0442\u044c \u043f\u043b\u0430\u043d"]];
+  plan.getRange("Q2:Q4").format = {
     fill: colors.title,
     font: fontStyle({ bold: true, color: colors.white }),
     horizontalAlignment: "center",
     verticalAlignment: "center",
   };
-  plan.getRange("Q2:Q4").merge();
-  plan.getRange("Q2").values = [["Экспорт плана"]];
-  plan.getRange("Q2:Q4").format = {
+  plan.getRange("R2:R4").merge();
+  plan.getRange("R2").values = [["Экспорт плана"]];
+  plan.getRange("R2:R4").format = {
     fill: colors.title,
     font: fontStyle({ bold: true, color: colors.white }),
     horizontalAlignment: "center",

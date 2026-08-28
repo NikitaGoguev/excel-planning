@@ -416,6 +416,7 @@ Public Function LoadEstimateRowsToBacklogFast(ByVal sourceTbl As ListObject, ByV
     Dim targetRowIndex As Long
     Dim parentRowIndex As Long
     Dim levelValue As Long
+    Dim deValue As Double
     Dim anValue As Double
     Dim beValue As Double
     Dim feValue As Double
@@ -455,7 +456,8 @@ Public Function LoadEstimateRowsToBacklogFast(ByVal sourceTbl As ListObject, ByV
                 targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 3) = sourceValues(sourceRowIndex, EST_COL_DESCRIPTION)
                 targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 4) = sourceValues(sourceRowIndex, EST_COL_TICKET)
                 targetValues(targetRowIndex, PLAN_COL_PRIORITY - PLAN_COL_DATA_FIRST + 5) = sourceValues(sourceRowIndex, EST_COL_NOTE)
-                TaskEstimateArrayEffectiveEstimates sourceValues, levelValues, hasChildren, sourceRowIndex, sourceRowCount, anValue, beValue, feValue, qaValue
+                TaskEstimateArrayEffectiveEstimates sourceValues, levelValues, hasChildren, sourceRowIndex, sourceRowCount, deValue, anValue, beValue, feValue, qaValue
+                If deValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_DE - PLAN_COL_DATA_FIRST + 1) = deValue
                 If anValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_AN - PLAN_COL_DATA_FIRST + 1) = anValue
                 If beValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_BE - PLAN_COL_DATA_FIRST + 1) = beValue
                 If feValue <> 0 Then targetValues(targetRowIndex, PLAN_COL_FE - PLAN_COL_DATA_FIRST + 1) = feValue
@@ -501,6 +503,7 @@ Public Function TaskEstimateArrayRowHasTask(ByRef values As Variant, ByVal rowIn
         Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_DESCRIPTION) _
         Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_TICKET) _
         Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_NOTE) _
+        Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_DE) _
         Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_AN) _
         Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_BE) _
         Or TaskEstimateArrayCellHasValue(values, rowIndex, EST_COL_FE) _
@@ -511,16 +514,18 @@ Public Function TaskEstimateArrayCellHasValue(ByRef values As Variant, ByVal row
     TaskEstimateArrayCellHasValue = (Trim$(CStr(values(rowIndex, colIndex))) <> "")
 End Function
 
-Public Sub TaskEstimateArrayEffectiveEstimates(ByRef values As Variant, ByRef levelValues As Variant, ByRef hasChildren() As Boolean, ByVal rootRowIndex As Long, ByVal rowCount As Long, ByRef anValue As Double, ByRef beValue As Double, ByRef feValue As Double, ByRef qaValue As Double)
+Public Sub TaskEstimateArrayEffectiveEstimates(ByRef values As Variant, ByRef levelValues As Variant, ByRef hasChildren() As Boolean, ByVal rootRowIndex As Long, ByVal rowCount As Long, ByRef deValue As Double, ByRef anValue As Double, ByRef beValue As Double, ByRef feValue As Double, ByRef qaValue As Double)
     Dim scanRow As Long
     Dim scanLevel As Long
 
+    deValue = 0
     anValue = 0
     beValue = 0
     feValue = 0
     qaValue = 0
 
     If Not hasChildren(rootRowIndex) Then
+        deValue = NzDouble(values(rootRowIndex, EST_COL_DE))
         anValue = NzDouble(values(rootRowIndex, EST_COL_AN))
         beValue = NzDouble(values(rootRowIndex, EST_COL_BE))
         feValue = NzDouble(values(rootRowIndex, EST_COL_FE))
@@ -533,6 +538,7 @@ Public Sub TaskEstimateArrayEffectiveEstimates(ByRef values As Variant, ByRef le
         scanLevel = TaskEstimateArrayLevel(levelValues(scanRow, 1))
         If scanLevel = 0 Then Exit For
         If Not hasChildren(scanRow) Then
+            deValue = deValue + NzDouble(values(scanRow, EST_COL_DE))
             anValue = anValue + NzDouble(values(scanRow, EST_COL_AN))
             beValue = beValue + NzDouble(values(scanRow, EST_COL_BE))
             feValue = feValue + NzDouble(values(scanRow, EST_COL_FE))
@@ -608,7 +614,7 @@ Public Sub RefreshQuarterPlanTable(ByVal tbl As ListObject)
     actionRange.VerticalAlignment = xlCenter
 
     Set effortRange = tbl.ListColumns(PLAN_COL_EFFORT).DataBodyRange
-    effortRange.FormulaR1C1 = "=IF(COUNTA(RC[-8]:RC[-1])=0,"""",IFERROR(IF(RC[-4]="""",0,CEILING(RC[-4]/'02_Capacity'!R20C5,1))+IF(RC[-3]="""",0,CEILING(RC[-3]/'02_Capacity'!R20C5,1))+IF(RC[-2]="""",0,CEILING(RC[-2]/'02_Capacity'!R20C5,1))+IF(RC[-1]="""",0,CEILING(RC[-1]/'02_Capacity'!R20C5,1)),""""))"
+    effortRange.FormulaR1C1 = "=IF(COUNTA(RC[-9]:RC[-1])=0,"""",IFERROR(IF(RC[-5]="""",0,CEILING(RC[-5]/'02_Capacity'!R25C5,1))+IF(RC[-4]="""",0,CEILING(RC[-4]/'02_Capacity'!R20C5,1))+IF(RC[-3]="""",0,CEILING(RC[-3]/'02_Capacity'!R20C5,1))+IF(RC[-2]="""",0,CEILING(RC[-2]/'02_Capacity'!R20C5,1))+IF(RC[-1]="""",0,CEILING(RC[-1]/'02_Capacity'!R20C5,1)),""""))"
 End Sub
 
 Public Sub RecalculateQuarterPlan()
@@ -618,7 +624,7 @@ Public Sub RecalculateQuarterPlan()
     Dim activeTbl As ListObject, greyTbl As ListObject, backlogTbl As ListObject, memberTbl As ListObject, ruleTbl As ListObject, holidayTbl As ListObject
     Dim tasks() As Variant, resources As Variant, holidays As Variant, rules As Variant, results As Variant
     Dim rowIndex As Long, techIndex As Long, rowCount As Long
-    Dim firstWorkDate As Date, focusFactor As Double, diagnostic As String
+    Dim firstWorkDate As Date, focusFactor As Double, designFocusFactor As Double, diagnostic As String
 
     Application.EnableEvents = False
     Set wsPlan = GetQuarterPlanWorksheet()
@@ -645,13 +651,14 @@ Public Sub RecalculateQuarterPlan()
     If Not IsDate(wsQuarter.Range("B4").Value) Then MarkQuarterPlanDiagnostics activeTbl, "Quarter start date is missing.": GoTo SafeExit
     firstWorkDate = CDate(wsQuarter.Range("B4").Value)
     focusFactor = NzDouble(wsCapacity.Range("E20").Value)
+    designFocusFactor = NzDouble(wsCapacity.Range("E25").Value)
     If focusFactor <= 0 Then MarkQuarterPlanDiagnostics activeTbl, "Core team focus factor is missing or <= 0.": GoTo SafeExit
     If Not BuildQuarterPlanRuleMatrix(ruleTbl, rules, diagnostic) Then MarkQuarterPlanDiagnostics activeTbl, diagnostic: GoTo SafeExit
 
     resources = BuildQuarterPlanResourceMatrix(memberTbl)
     holidays = BuildQuarterPlanHolidayArray(holidayTbl)
     rowCount = activeTbl.DataBodyRange.Rows.Count
-    ReDim tasks(1 To rowCount, 1 To 6)
+    ReDim tasks(1 To rowCount, 1 To 7)
     For rowIndex = 1 To rowCount
         If QuarterPlanRowHasTask(activeTbl, rowIndex) Then
             tasks(rowIndex, 1) = True
@@ -660,17 +667,25 @@ Public Sub RecalculateQuarterPlan()
             tasks(rowIndex, 4) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_BE).Value
             tasks(rowIndex, 5) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_FE).Value
             tasks(rowIndex, 6) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_QA).Value
+            tasks(rowIndex, 7) = activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_DE).Value
         End If
     Next rowIndex
 
-    results = QuarterPlanSchedule(tasks, resources, holidays, rules, firstWorkDate, focusFactor)
+    results = QuarterPlanSchedule(tasks, resources, holidays, rules, firstWorkDate, focusFactor, designFocusFactor)
     For rowIndex = 1 To rowCount
         If QuarterPlanRowHasTask(activeTbl, rowIndex) Then
             activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_EFFORT).Value = results(rowIndex, 1)
             If IsDate(results(rowIndex, 2)) Then activeTbl.DataBodyRange.Cells(rowIndex, PLAN_COL_READY_DATE).Value = results(rowIndex, 2)
-            For techIndex = 1 To 13
-                wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_AN_DAYS + techIndex - 1).Value = results(rowIndex, techIndex + 2)
+            wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_DE_DAYS).Value = results(rowIndex, 16)
+            For techIndex = 0 To 3
+                wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_AN_DAYS + techIndex).Value = results(rowIndex, 3 + techIndex)
             Next techIndex
+            wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_AN_DAYS + 4).Value = results(rowIndex, 17)
+            wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_AN_DAYS + 5).Value = results(rowIndex, 18)
+            For techIndex = 0 To 7
+                wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_AN_DAYS + 6 + techIndex).Value = results(rowIndex, 7 + techIndex)
+            Next techIndex
+            wsPlan.Cells(activeTbl.DataBodyRange.Row + rowIndex - 1, PLAN_SHEET_COL_DIAGNOSTIC).Value = results(rowIndex, 15)
         End If
     Next rowIndex
 
@@ -740,7 +755,7 @@ Public Function QuarterPlanStatusCode(ByVal statusText As String) As String
 End Function
 
 Public Function QuarterPlanExpertiseForRole(ByVal roleText As String) As String
-    If IsPlanRoleForExpertise(Trim$(roleText), "AN") Then QuarterPlanExpertiseForRole = "AN" Else If IsPlanRoleForExpertise(Trim$(roleText), "BE") Then QuarterPlanExpertiseForRole = "BE" Else If IsPlanRoleForExpertise(Trim$(roleText), "FE") Then QuarterPlanExpertiseForRole = "FE" Else If IsPlanRoleForExpertise(Trim$(roleText), "QA") Then QuarterPlanExpertiseForRole = "QA"
+    If IsPlanRoleForExpertise(Trim$(roleText), "DE") Then QuarterPlanExpertiseForRole = "DE" Else If IsPlanRoleForExpertise(Trim$(roleText), "AN") Then QuarterPlanExpertiseForRole = "AN" Else If IsPlanRoleForExpertise(Trim$(roleText), "BE") Then QuarterPlanExpertiseForRole = "BE" Else If IsPlanRoleForExpertise(Trim$(roleText), "FE") Then QuarterPlanExpertiseForRole = "FE" Else If IsPlanRoleForExpertise(Trim$(roleText), "QA") Then QuarterPlanExpertiseForRole = "QA"
 End Function
 
 
@@ -841,6 +856,8 @@ End Function
 
 Public Function IsPlanRoleForExpertise(ByVal roleText As String, ByVal expertiseCode As String) As Boolean
     Select Case expertiseCode
+        Case "DE"
+            IsPlanRoleForExpertise = (roleText = PlanRoleDesigner())
         Case "AN"
             IsPlanRoleForExpertise = (roleText = PlanRoleAnalyst() Or roleText = PlanRoleAnalysisLead())
         Case "BE"
@@ -850,6 +867,10 @@ Public Function IsPlanRoleForExpertise(ByVal roleText As String, ByVal expertise
         Case "QA"
             IsPlanRoleForExpertise = (roleText = PlanRoleTester())
     End Select
+End Function
+
+Public Function PlanRoleDesigner() As String
+    PlanRoleDesigner = TextFromCodes(1044, 1080, 1079, 1072, 1081, 1085, 1077, 1088)
 End Function
 
 Public Function PlanRoleAnalyst() As String

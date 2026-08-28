@@ -259,7 +259,7 @@ try {
     Write-Pass "COM table lookup"
 
     $teamCompositionTable = $settingsSheet.ListObjects("tblTeamComposition")
-    if ($teamCompositionTable.Range.Address($false, $false) -ne "A13:B19") {
+    if ($teamCompositionTable.Range.Address($false, $false) -ne "A13:B20") {
         throw "tblTeamComposition range is $($teamCompositionTable.Range.Address($false, $false))"
     }
     $teamMembersTable = $settingsSheet.ListObjects("tblTeamMembers")
@@ -295,6 +295,8 @@ try {
 
     $artifactOptionsTable = $listsSheet.ListObjects("tblTaskCommentArtifacts")
     $adjacentOptionsTable = $listsSheet.ListObjects("tblTaskCommentAdjacentTeams")
+    $statusesTable = $listsSheet.ListObjects("tblStatuses")
+    $yesNoTable = $listsSheet.ListObjects("tblYesNo")
     $expectedArtifactOptions = @("БТ", "Макеты", "ОТАР", "ПСИ ИБ")
     $expectedAdjacentOptions = @("Echo", "Sierra", "Bravo", ("Fox" + "trot"), "Uniform", "India", "Ф1", "ЕСК", "Тесса")
     for ($index = 1; $index -le $expectedArtifactOptions.Count; $index++) {
@@ -303,7 +305,17 @@ try {
     for ($index = 1; $index -le $expectedAdjacentOptions.Count; $index++) {
         Assert-TextEquals ([string]$adjacentOptionsTable.DataBodyRange.Cells($index, 1).Text) ([string]$expectedAdjacentOptions[$index - 1]) "Adjacent-team option $index"
     }
+    Assert-TextEquals ([string]$statusesTable.DataBodyRange.Cells(1, 1).Text) "Готова аналитика" "First planning status on sheet 101"
+    Assert-TextEquals ([string]$statusesTable.DataBodyRange.Cells(7, 1).Text) "Отложено" "Last planning status on sheet 101"
+    Assert-TextEquals ([string]$yesNoTable.DataBodyRange.Cells(1, 1).Text) "Да" "Yes value on sheet 101"
+    Assert-TextEquals ([string]$yesNoTable.DataBodyRange.Cells(2, 1).Text) "Нет" "No value on sheet 101"
     Write-Pass "COM sheet 101 comment options"
+
+    $referencesSheet = $workbook.Worksheets.Item("99_Правила планирования")
+    Assert-TextEquals ([string]$referencesSheet.ListObjects("tblExpertise").DataBodyRange.Cells(2, 1).Text) "DE" "DE expertise code"
+    Assert-NumberClose ([double]$referencesSheet.ListObjects("tblExpertise").DataBodyRange.Cells(2, 3).Value2) 1 "DE waterfall order"
+    Assert-TextEquals ([string]$referencesSheet.Range("Z1").Address($false, $false)) "Z1" "JQL staging cell on planning rules sheet"
+    Write-Pass "COM planning rules references"
 
     Assert-TextEquals ([string]$capacitySheet.Range("F6").Text) "Авто 00" "Capacity auto header"
     Assert-TextEquals ([string]$capacitySheet.Range("G6").Text) "Переопределение" "Capacity override header"
@@ -317,6 +329,29 @@ try {
     Assert-NumberClose ([double]$capacitySheet.Range("E8").Value2) 2 "Initial analyst effective count"
     Assert-NumberClose ([double]$capacitySheet.Range("F14").Value2) 0 "Initial analyst auto vacation"
     Assert-NumberClose ([double]$capacitySheet.Range("E14").Value2) 0 "Initial analyst effective vacation"
+    Assert-TextEquals ([string]$capacitySheet.Range("C23").Text) "Количество дизайнеров" "Designer count label"
+    Assert-TextEquals ([string]$capacitySheet.Range("C24").Text) "Отпуска дизайнеров" "Designer vacation label"
+    Assert-TextEquals ([string]$capacitySheet.Range("C25").Text) "Фокус-фактор дизайнеров" "Designer focus factor label"
+    if ([int]$capacitySheet.Range("F25").HorizontalAlignment -ne -4131) {
+        throw "Designer focus-factor note alignment is $($capacitySheet.Range("F25").HorizontalAlignment), expected left"
+    }
+    Assert-NumberClose ([double]$capacitySheet.Range("F23").Value2) 1 "Initial designer auto count"
+    Assert-NumberClose ([double]$capacitySheet.Range("E23").Value2) 1 "Initial designer effective count"
+    Assert-NumberClose ([double]$capacitySheet.Range("F24").Value2) 0 "Initial designer auto vacation"
+    Assert-NumberClose ([double]$capacitySheet.Range("E24").Value2) 0 "Initial designer effective vacation"
+    Assert-NumberClose ([double]$capacitySheet.Range("E25").Value2) 0.7 "Initial designer focus factor"
+    Assert-NumberClose ([double]$capacitySheet.Range("E34").Value2) 43 "Initial designer capacity"
+    Assert-NumberClose ([double]$capacitySheet.Range("E35").Value2) 493 "Initial total capacity with designers"
+    $capacitySheet.Range("G23").Value2 = 2
+    $excel.CalculateFull()
+    Assert-NumberClose ([double]$capacitySheet.Range("E23").Value2) 2 "Designer count override"
+    Assert-NumberClose ([double]$capacitySheet.Range("E34").Value2) 86 "Designer capacity with count override"
+    $capacitySheet.Range("G23").ClearContents()
+    $capacitySheet.Range("G24").Value2 = 2
+    $excel.CalculateFull()
+    Assert-NumberClose ([double]$capacitySheet.Range("E34").Value2) 42 "Designer capacity with vacation override"
+    $capacitySheet.Range("G24").ClearContents()
+    $excel.CalculateFull()
     $capacitySheet.Range("G8").Value2 = 9
     $excel.CalculateFull()
     Assert-NumberClose ([double]$capacitySheet.Range("F8").Value2) 2 "Analyst auto count with override"
@@ -334,6 +369,11 @@ try {
     if ($settingsSheet.Range("C14").MergeArea.Address($false, $false) -ne "C14:G14") {
         throw "Team role comment row 14 merge range is $($settingsSheet.Range("C14").MergeArea.Address($false, $false)), expected C14:G14"
     }
+    Assert-TextEquals ([string]$teamCompositionTable.DataBodyRange.Cells(7, 1).Text) "Дизайнер" "Designer composition role"
+    if ($settingsSheet.Range("C20").MergeArea.Address($false, $false) -ne "C20:G20") {
+        throw "Designer comment merge range is $($settingsSheet.Range("C20").MergeArea.Address($false, $false)), expected C20:G20"
+    }
+    Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(12, 1).Text) "Дизайнер" "Initial designer member role"
     Write-Pass "COM sheet 00 comments layout"
 
     Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(4, 1).Text) "Аналитик" "Initial second analyst role"
@@ -396,21 +436,37 @@ try {
             throw "Tester trailing row vacation formula is blank before composition change in column $col"
         }
     }
+    $designerCompositionRow = 7
+    $teamCompositionTable.DataBodyRange.Cells($designerCompositionRow, 2).Value2 = 2
+    $excel.CalculateFull()
+    Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(12, 1).Text) "Дизайнер" "Added second designer role"
+    Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(12, 2).Text) "Дизайнер 2" "Added second designer default name"
+    $designerVacationFormulaBefore = @{}
+    foreach ($col in @(6, 9, 12)) {
+        $designerVacationFormulaBefore[$col] = [string]$teamMembersTable.DataBodyRange.Cells(12, $col).FormulaR1C1
+    }
+    $teamCompositionTable.DataBodyRange.Cells($designerCompositionRow, 2).Value2 = 1
+    $excel.CalculateFull()
+    foreach ($col in @(1, 2, 3, 4, 5, 7, 8, 10, 11)) {
+        Assert-CellBlank $teamMembersTable.DataBodyRange.Cells(12, $col) "Reduced designer count cleared editable trailing column $col"
+    }
+    foreach ($col in @(6, 9, 12)) {
+        if (![bool]$teamMembersTable.DataBodyRange.Cells(12, $col).HasFormula) { throw "Reduced designer count removed vacation formula from column $col" }
+        Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(12, $col).FormulaR1C1) ([string]$designerVacationFormulaBefore[$col]) "Reduced designer count preserves vacation formula $col"
+    }
     $teamCompositionTable.DataBodyRange.Cells($testerCompositionRow, 2).Value2 = 3
     $excel.CalculateFull()
     Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(10, 1).Text) "Тестировщик" "Added third tester role"
     Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(10, 2).Text) "Тестировщик 3" "Added third tester default name"
     $teamCompositionTable.DataBodyRange.Cells($testerCompositionRow, 2).Value2 = 2
     $excel.CalculateFull()
-    foreach ($col in @(1, 2, 3, 4, 5, 7, 8, 10, 11)) {
-        Assert-CellBlank $teamMembersTable.DataBodyRange.Cells(10, $col) "Reduced tester count cleared editable trailing column $col"
-    }
+    Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(10, 1).Text) "Дизайнер" "Reduced tester count shifts designer into the first freed row"
+    Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(10, 2).Text) "Дизайнер 1" "Reduced tester count preserves designer default name"
     foreach ($col in @(6, 9, 12)) {
         if (![bool]$teamMembersTable.DataBodyRange.Cells(10, $col).HasFormula) {
             throw "Reduced tester count removed vacation formula from trailing column $col"
         }
         Assert-TextEquals ([string]$teamMembersTable.DataBodyRange.Cells(10, $col).FormulaR1C1) ([string]$testerVacationFormulaBefore[$col]) "Reduced tester count preserves vacation formula text in column $col"
-        Assert-CellBlank $teamMembersTable.DataBodyRange.Cells(10, $col) "Reduced tester count keeps blank vacation result column $col"
     }
     Write-Pass "COM sheet 00 team member sync"
 
@@ -422,6 +478,7 @@ try {
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
     $legacyCsvPath = Join-Path $tempDir "task-estimates-legacy.csv"
     $taskExportPath = Join-Path $tempDir "task-estimates-export.xlsx"
+    $legacyXlsxPath = Join-Path $tempDir "task-estimates-legacy.xlsx"
     $expressExportPath = Join-Path $tempDir "express-export.xlsx"
     $backlogExportPath = Join-Path $tempDir "quarter-plan-export.xlsx"
     $utf8WithoutBom = New-Object System.Text.UTF8Encoding -ArgumentList $false
@@ -438,6 +495,7 @@ try {
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 2).Text) $taskExpectedDirection "Imported task direction"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 3).Text) $taskExpectedDescription "Imported task description"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 4).Text) $taskExpectedKey "Imported task key"
+    Assert-CellBlank $estimateTable.DataBodyRange.Cells(1, 6) "CSV import leaves DE blank"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 3).Text) "" "Second task row after replace import"
 
     $excel.Run("RunTaskEstimateImportCsvPath", $legacyCsvPath, $true)
@@ -454,7 +512,8 @@ try {
     $estimateTable.DataBodyRange.Cells(1, 7).Value2 = 2.5
     $estimateTable.DataBodyRange.Cells(1, 8).Value2 = 3.5
     $estimateTable.DataBodyRange.Cells(1, 9).Value2 = 4.5
-    $estimateTable.DataBodyRange.Cells(1, 10).Value2 = "root comment"
+    $estimateTable.DataBodyRange.Cells(1, 10).Value2 = 5.5
+    $estimateTable.DataBodyRange.Cells(1, 11).Value2 = "root comment"
     Write-Pass "COM sheet 03 CSV replace import"
 
     $estimateSheet.Range("C3").Value2 = "broken header"
@@ -462,7 +521,7 @@ try {
     $excel.Run("RunTaskEstimateRefresh")
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertTaskEstimateUnicodeTextForTest")
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlTextForTest")
-    $expectedTaskHeaders = @("Приоритет", "Направление", "Описание", "ЗНИ/Jira", "Примечание", "AN", "BE", "FE", "QA", "Комментарий", "Экспорт")
+    $expectedTaskHeaders = @("Приоритет", "Направление", "Описание", "ЗНИ/Jira", "Примечание", "DE", "AN", "BE", "FE", "QA", "Комментарий")
     for ($col = 1; $col -le $expectedTaskHeaders.Count; $col++) {
         Assert-TextEquals ([string]$estimateTable.HeaderRowRange.Cells(1, $col).Text) ([string]$expectedTaskHeaders[$col - 1]) "Restored sheet 03 header $col"
     }
@@ -477,7 +536,7 @@ try {
         "btnTaskImportCsv" = "RunTaskEstimateImportCsv"
         "btnJql03" = "RunCopyJql"
         "tea_01_1" = "RunTaskEstimateCellAction"
-        "tea_01_13" = "RunTaskEstimateExpressExport"
+        "tea_01_15" = "RunTaskEstimateExpressExport"
         "tea_01_14" = "RunTaskEstimateCellAction"
     }
     foreach ($shapeName in $expectedTaskActions.Keys) {
@@ -497,7 +556,7 @@ try {
         "btnTaskImportCsv" = "Импорт CSV (до $($workbookLayout.limits.taskRows))"
         "btnJql03" = "JQL"
         "tea_01_1" = ">"
-        "tea_01_13" = "Экспорт"
+        "tea_01_15" = "Экспорт"
         "tea_01_14" = "+"
     }
     foreach ($shapeName in $expectedTaskCaptions.Keys) {
@@ -510,13 +569,14 @@ try {
     Write-Pass "COM sheet 03 Unicode-safe rebuild and action buttons"
 
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertTaskEstimateCommentOptionsForTest")
-    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 10).Text) "root comment" "Comment options test restores root comment"
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(1, 11).Text) "root comment" "Comment options test restores root comment"
     Write-Pass "COM sheet 03 comment-options form and append behavior"
 
     $taskShapeMacro = "'" + $workbook.Name + "'!ThisWorkbook.HandleTaskEstimateShapeAction"
     $excel.Run($taskShapeMacro, "tea_01_1")
     Assert-TextEquals ([string]$estimateSheet.Range("B4").Text) "x" "Parent delete action after decomposition"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 3).Text) $taskExpectedDescription "Child task description after decomposition"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(2, 6).Value2) 1.5 "Child DE after decomposition"
     Assert-TextEquals ([string]$estimateSheet.Range("B5").Text) "x" "Child delete action after decomposition"
     Assert-TextEquals ([string]$estimateSheet.Range("N4").Text) "+" "Root comment-options action after decomposition"
     Assert-TextEquals ([string]$estimateSheet.Range("N5").Text) "" "Child has no comment-options action"
@@ -542,7 +602,7 @@ try {
         Assert-TextEquals ([string]$exportSheet.Cells(2, 3).Text) $taskExpectedDescription "Task export description"
         Assert-TextEquals ([string]$exportSheet.Cells(2, 4).Text) $taskExpectedKey "Task export key"
         Assert-TextEquals ([string]$exportSheet.Cells(2, 5).Text) "root note" "Task export note"
-        Assert-TextEquals ([string]$exportSheet.Cells(2, 10).Text) "root comment" "Task export comment"
+        Assert-TextEquals ([string]$exportSheet.Cells(2, 11).Text) "root comment" "Task export comment"
         Assert-TextEquals ([string]$exportSheet.Cells(3, 3).Text) $taskExpectedDescription "Task export child description"
         if ([int]$exportSheet.Cells(3, 3).IndentLevel -ne 1) {
             throw "Task export child indent is $($exportSheet.Cells(3, 3).IndentLevel), expected 1"
@@ -558,17 +618,43 @@ try {
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 3).Text) $taskExpectedDescription "XLSX import root description"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 4).Text) $taskExpectedKey "XLSX import root key"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 5).Text) "root note" "XLSX import note"
-    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 10).Text) "root comment" "XLSX import comment"
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(2, 11).Text) "root comment" "XLSX import comment"
     Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(3, 3).Text) $taskExpectedDescription "XLSX import child description"
     Assert-TextEquals ([string]$estimateSheet.Range("B5").Text) "x" "XLSX import root delete action"
     Assert-TextEquals ([string]$estimateSheet.Range("B6").Text) "x" "XLSX import child delete action"
-    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 6).Value2) 1.5 "XLSX import child AN"
-    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 7).Value2) 2.5 "XLSX import child BE"
-    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 8).Value2) 3.5 "XLSX import child FE"
-    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 9).Value2) 4.5 "XLSX import child QA"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 6).Value2) 1.5 "XLSX import child DE"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 7).Value2) 2.5 "XLSX import child AN"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 8).Value2) 3.5 "XLSX import child BE"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 9).Value2) 4.5 "XLSX import child FE"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(3, 10).Value2) 5.5 "XLSX import child QA"
     Write-Pass "COM sheet 03 XLSX append import"
 
-    $excel.Run("RunTaskEstimateExpressExportPath", 1, $expressExportPath)
+    $legacyWorkbook = $excel.Workbooks.Add()
+    try {
+        $legacySheet = $legacyWorkbook.Worksheets.Item(1)
+        $legacyHeaders = @("Приоритет", "Направление", "Описание", "ЗНИ/Jira", "Примечание", "AN", "BE", "FE", "QA", "Комментарий", "Экспорт")
+        for ($col = 1; $col -le $legacyHeaders.Count; $col++) { $legacySheet.Cells(1, $col).Value2 = $legacyHeaders[$col - 1] }
+        $legacySheet.Cells(2, 1).Value2 = 90
+        $legacySheet.Cells(2, 3).Value2 = "Legacy XLSX task"
+        $legacySheet.Cells(2, 4).Value2 = "LEGACY-XLSX"
+        $legacySheet.Cells(2, 6).Value2 = 7
+        $legacySheet.Cells(2, 7).Value2 = 8
+        $legacySheet.Cells(2, 8).Value2 = 9
+        $legacySheet.Cells(2, 9).Value2 = 10
+        $legacySheet.Cells(2, 10).Value2 = "legacy comment"
+        $legacyWorkbook.SaveAs($legacyXlsxPath, 51)
+    } finally {
+        $legacyWorkbook.Close($false)
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($legacyWorkbook) | Out-Null
+    }
+    $excel.Run("RunTaskEstimateImportXlsxPath", $legacyXlsxPath)
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(4, 3).Text) "Legacy XLSX task" "Legacy XLSX description"
+    Assert-CellBlank $estimateTable.DataBodyRange.Cells(4, 6) "Legacy XLSX leaves DE blank"
+    Assert-NumberClose ([double]$estimateTable.DataBodyRange.Cells(4, 7).Value2) 7 "Legacy XLSX maps AN"
+    Assert-TextEquals ([string]$estimateTable.DataBodyRange.Cells(4, 11).Text) "legacy comment" "Legacy XLSX maps comment"
+    Write-Pass "COM sheet 03 legacy XLSX import"
+
+    $excel.Run("RunTaskEstimateExpressExportPath", 2, $expressExportPath)
     if (!(Test-Path -LiteralPath $expressExportPath)) {
         throw "Express estimate export file was not created: $expressExportPath"
     }
@@ -578,6 +664,7 @@ try {
         Assert-TextEquals ([string]$expressSheet.Range("E2").Text) $taskExpectedKey "Express export key"
         Assert-TextEquals ([string]$expressSheet.Range("E3").Text) $taskExpectedDescription "Express export description"
         Assert-TextEquals ([string]$expressSheet.Range("A17").Text) $taskExpectedDescription "Express export first task"
+        Assert-NumberClose ([double]$expressSheet.Range("H17").Value2) 1.5 "Express export maps DE to Design"
     } finally {
         $expressWorkbook.Close($false)
         [System.Runtime.InteropServices.Marshal]::ReleaseComObject($expressWorkbook) | Out-Null
@@ -599,7 +686,7 @@ try {
     $excel.Run("RunQuarterPlanRecalculate")
     Write-Pass "COM backlog load move and recalc"
 
-    $statusValidation = [string]$activeTable.DataBodyRange.Cells(1, 18).Validation.Formula1
+    $statusValidation = [string]$activeTable.DataBodyRange.Cells(1, 19).Validation.Formula1
     foreach ($status in @("Готова аналитика", "Готова разработка", "Готова разработка (бэк)", "Готова разработка (фронт)", "Готово к релизу", "ПРОМ", "Отложено")) {
         if (!$statusValidation.Contains($status)) {
             throw "Status validation list does not contain '$status': $statusValidation"
@@ -614,123 +701,140 @@ try {
 
     function Reset-ActivePlanStatusScenario {
         for ($row = 1; $row -le $activeTable.DataBodyRange.Rows.Count; $row++) {
-            for ($col = 6; $col -le 19; $col++) {
+            for ($col = 6; $col -le 20; $col++) {
                 $activeTable.DataBodyRange.Cells($row, $col).ClearContents() | Out-Null
             }
         }
         $activeTable.DataBodyRange.Cells(1, 8).Value2 = "Status scenario row 1"
         $activeTable.DataBodyRange.Cells(1, 11).Value2 = 2
-        $activeTable.DataBodyRange.Cells(1, 12).Value2 = 3
-        $activeTable.DataBodyRange.Cells(1, 13).Value2 = 5
-        $activeTable.DataBodyRange.Cells(1, 14).Value2 = 7
+        $activeTable.DataBodyRange.Cells(1, 12).Value2 = 2
+        $activeTable.DataBodyRange.Cells(1, 13).Value2 = 3
+        $activeTable.DataBodyRange.Cells(1, 14).Value2 = 5
+        $activeTable.DataBodyRange.Cells(1, 15).Value2 = 7
     }
 
-    function Assert-StatusScenario([string]$Status, [double]$ExpectedAn, [double]$ExpectedBe, [double]$ExpectedFe, [double]$ExpectedQa, [string]$ReadyKind) {
+    function Assert-StatusScenario([string]$Status, [double]$ExpectedDe, [double]$ExpectedAn, [double]$ExpectedBe, [double]$ExpectedFe, [double]$ExpectedQa, [string]$ReadyKind) {
         Reset-ActivePlanStatusScenario
         if ($Status -ne "<blank>") {
-            $activeTable.DataBodyRange.Cells(1, 18).Value2 = $Status
+            $activeTable.DataBodyRange.Cells(1, 19).Value2 = $Status
         }
         $excel.Run("RunQuarterPlanRecalculate")
-        Assert-NumberClose ([double]$planSheet.Range("K3").Value2) $ExpectedAn "AN planned with risk for status $Status"
-        Assert-NumberClose ([double]$planSheet.Range("L3").Value2) $ExpectedBe "BE planned with risk for status $Status"
-        Assert-NumberClose ([double]$planSheet.Range("M3").Value2) $ExpectedFe "FE planned with risk for status $Status"
-        Assert-NumberClose ([double]$planSheet.Range("N3").Value2) $ExpectedQa "QA planned with risk for status $Status"
+        Assert-NumberClose ([double]$planSheet.Range("K3").Value2) $ExpectedDe "DE planned with risk for status $Status"
+        Assert-NumberClose ([double]$planSheet.Range("L3").Value2) $ExpectedAn "AN planned with risk for status $Status"
+        Assert-NumberClose ([double]$planSheet.Range("M3").Value2) $ExpectedBe "BE planned with risk for status $Status"
+        Assert-NumberClose ([double]$planSheet.Range("N3").Value2) $ExpectedFe "FE planned with risk for status $Status"
+        Assert-NumberClose ([double]$planSheet.Range("O3").Value2) $ExpectedQa "QA planned with risk for status $Status"
 
-        Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 15).Value2) 26 "Full effort for status $Status" 0.0001
+        Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 16).Value2) 29 "Full effort with DE for status $Status" 0.0001
         if ($ReadyKind -eq "NONE") {
-            Assert-CellBlank $activeTable.DataBodyRange.Cells(1, 16) "Ready date for status $Status"
-            Assert-CellBlank $planSheet.Range("T6") "AN duration for status $Status"
-            Assert-CellBlank $planSheet.Range("U6") "BE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("V6") "FE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("W6") "QA duration for status $Status"
-            Assert-CellBlank $planSheet.Range("X6") "AN start for status $Status"
-            Assert-CellBlank $planSheet.Range("Z6") "BE start for status $Status"
-            Assert-CellBlank $planSheet.Range("AB6") "FE start for status $Status"
-            Assert-CellBlank $planSheet.Range("AD6") "QA start for status $Status"
+            Assert-CellBlank $activeTable.DataBodyRange.Cells(1, 17) "Ready date for status $Status"
+            foreach ($cell in @("U6", "V6", "W6", "X6", "Y6", "Z6", "AB6", "AD6", "AF6", "AH6")) { Assert-CellBlank $planSheet.Range($cell) "Schedule cell $cell for status $Status" }
             return
         }
 
-        Assert-CellNotBlank $planSheet.Range("T6") "AN duration for status $Status"
-        Assert-CellNotBlank $planSheet.Range("X6") "AN start for status $Status"
-        Assert-CellNotBlank $planSheet.Range("Y6") "AN finish for status $Status"
+        Assert-CellNotBlank $planSheet.Range("U6") "DE duration for status $Status"
+        Assert-CellNotBlank $planSheet.Range("Z6") "DE start for status $Status"
+        Assert-CellNotBlank $planSheet.Range("AA6") "DE finish for status $Status"
+        Assert-CellNotBlank $planSheet.Range("V6") "AN duration for status $Status"
+        Assert-CellNotBlank $planSheet.Range("AB6") "AN start for status $Status"
+        Assert-CellNotBlank $planSheet.Range("AC6") "AN finish for status $Status"
+        Assert-SameExcelDate $planSheet.Range("Z6") $planSheet.Range("AB6") "DE and AN parallel start for status $Status"
 
         if ($ReadyKind -eq "AN") {
-            Assert-CellBlank $planSheet.Range("U6") "BE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("V6") "FE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("W6") "QA duration for status $Status"
-            Assert-CellBlank $planSheet.Range("Z6") "BE start for status $Status"
-            Assert-CellBlank $planSheet.Range("AB6") "FE start for status $Status"
-            Assert-CellBlank $planSheet.Range("AD6") "QA start for status $Status"
-            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 16) $planSheet.Range("Y6") "Ready date for status $Status"
+            Assert-CellBlank $planSheet.Range("W6") "BE duration for status $Status"
+            Assert-CellBlank $planSheet.Range("X6") "FE duration for status $Status"
+            Assert-CellBlank $planSheet.Range("Y6") "QA duration for status $Status"
+            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 17) $planSheet.Range("AC6") "Ready date for status $Status"
         } elseif ($ReadyKind -eq "DEV") {
-            Assert-CellNotBlank $planSheet.Range("U6") "BE duration for status $Status"
-            Assert-CellNotBlank $planSheet.Range("V6") "FE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("W6") "QA duration for status $Status"
-            Assert-CellBlank $planSheet.Range("AD6") "QA start for status $Status"
-            Assert-CellBlank $planSheet.Range("AE6") "QA finish for status $Status"
-            if ([double]$planSheet.Range("AA6").Value2 -ge [double]$planSheet.Range("AC6").Value2) {
-                Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 16) $planSheet.Range("AA6") "Ready date for status $Status"
+            Assert-CellNotBlank $planSheet.Range("W6") "BE duration for status $Status"
+            Assert-CellNotBlank $planSheet.Range("X6") "FE duration for status $Status"
+            Assert-CellBlank $planSheet.Range("Y6") "QA duration for status $Status"
+            Assert-CellBlank $planSheet.Range("AH6") "QA start for status $Status"
+            Assert-CellBlank $planSheet.Range("AI6") "QA finish for status $Status"
+            if ([double]$planSheet.Range("AE6").Value2 -ge [double]$planSheet.Range("AG6").Value2) {
+                Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 17) $planSheet.Range("AE6") "Ready date for status $Status"
             } else {
-                Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 16) $planSheet.Range("AC6") "Ready date for status $Status"
+                Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 17) $planSheet.Range("AG6") "Ready date for status $Status"
             }
         } elseif ($ReadyKind -eq "BACK") {
-            Assert-CellNotBlank $planSheet.Range("U6") "BE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("V6") "FE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("W6") "QA duration for status $Status"
-            Assert-CellNotBlank $planSheet.Range("Z6") "BE start for status $Status"
-            Assert-CellNotBlank $planSheet.Range("AA6") "BE finish for status $Status"
-            Assert-CellBlank $planSheet.Range("AB6") "FE start for status $Status"
-            Assert-CellBlank $planSheet.Range("AC6") "FE finish for status $Status"
-            Assert-CellBlank $planSheet.Range("AD6") "QA start for status $Status"
-            Assert-CellBlank $planSheet.Range("AE6") "QA finish for status $Status"
-            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 16) $planSheet.Range("AA6") "Ready date for status $Status"
+            Assert-CellNotBlank $planSheet.Range("W6") "BE duration for status $Status"
+            Assert-CellBlank $planSheet.Range("X6") "FE duration for status $Status"
+            Assert-CellBlank $planSheet.Range("Y6") "QA duration for status $Status"
+            Assert-CellNotBlank $planSheet.Range("AD6") "BE start for status $Status"
+            Assert-CellNotBlank $planSheet.Range("AE6") "BE finish for status $Status"
+            Assert-CellBlank $planSheet.Range("AF6") "FE start for status $Status"
+            Assert-CellBlank $planSheet.Range("AG6") "FE finish for status $Status"
+            Assert-CellBlank $planSheet.Range("AH6") "QA start for status $Status"
+            Assert-CellBlank $planSheet.Range("AI6") "QA finish for status $Status"
+            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 17) $planSheet.Range("AE6") "Ready date for status $Status"
         } elseif ($ReadyKind -eq "FRONT") {
-            Assert-CellBlank $planSheet.Range("U6") "BE duration for status $Status"
-            Assert-CellNotBlank $planSheet.Range("V6") "FE duration for status $Status"
-            Assert-CellBlank $planSheet.Range("W6") "QA duration for status $Status"
-            Assert-CellBlank $planSheet.Range("Z6") "BE start for status $Status"
-            Assert-CellBlank $planSheet.Range("AA6") "BE finish for status $Status"
-            Assert-CellNotBlank $planSheet.Range("AB6") "FE start for status $Status"
-            Assert-CellNotBlank $planSheet.Range("AC6") "FE finish for status $Status"
-            Assert-CellBlank $planSheet.Range("AD6") "QA start for status $Status"
-            Assert-CellBlank $planSheet.Range("AE6") "QA finish for status $Status"
-            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 16) $planSheet.Range("AC6") "Ready date for status $Status"
+            Assert-CellBlank $planSheet.Range("W6") "BE duration for status $Status"
+            Assert-CellNotBlank $planSheet.Range("X6") "FE duration for status $Status"
+            Assert-CellBlank $planSheet.Range("Y6") "QA duration for status $Status"
+            Assert-CellBlank $planSheet.Range("AD6") "BE start for status $Status"
+            Assert-CellBlank $planSheet.Range("AE6") "BE finish for status $Status"
+            Assert-CellNotBlank $planSheet.Range("AF6") "FE start for status $Status"
+            Assert-CellNotBlank $planSheet.Range("AG6") "FE finish for status $Status"
+            Assert-CellBlank $planSheet.Range("AH6") "QA start for status $Status"
+            Assert-CellBlank $planSheet.Range("AI6") "QA finish for status $Status"
+            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 17) $planSheet.Range("AG6") "Ready date for status $Status"
         } else {
-            Assert-CellNotBlank $planSheet.Range("U6") "BE duration for status $Status"
-            Assert-CellNotBlank $planSheet.Range("V6") "FE duration for status $Status"
-            Assert-CellNotBlank $planSheet.Range("W6") "QA duration for status $Status"
-            Assert-CellNotBlank $planSheet.Range("AD6") "QA start for status $Status"
-            Assert-CellNotBlank $planSheet.Range("AE6") "QA finish for status $Status"
-            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 16) $planSheet.Range("AE6") "Ready date for status $Status"
+            Assert-CellNotBlank $planSheet.Range("W6") "BE duration for status $Status"
+            Assert-CellNotBlank $planSheet.Range("X6") "FE duration for status $Status"
+            Assert-CellNotBlank $planSheet.Range("Y6") "QA duration for status $Status"
+            Assert-CellNotBlank $planSheet.Range("AH6") "QA start for status $Status"
+            Assert-CellNotBlank $planSheet.Range("AI6") "QA finish for status $Status"
+            Assert-SameExcelDate $activeTable.DataBodyRange.Cells(1, 17) $planSheet.Range("AI6") "Ready date for status $Status"
         }
     }
 
-    Assert-StatusScenario "Готова аналитика" 2.4 0 0 0 "AN"
-    Assert-StatusScenario "Готова разработка" 2.4 3.6 6 0 "DEV"
-    Assert-StatusScenario "Готова разработка (бэк)" 2.4 3.6 0 0 "BACK"
-    Assert-StatusScenario "Готова разработка (фронт)" 2.4 0 6 0 "FRONT"
-    Assert-StatusScenario "<blank>" 2.4 3.6 6 8.4 "FULL"
-    Assert-StatusScenario "Готово к релизу" 2.4 3.6 6 8.4 "FULL"
-    Assert-StatusScenario "ПРОМ" 2.4 3.6 6 8.4 "FULL"
-    Assert-StatusScenario "Отложено" 0 0 0 0 "NONE"
+    Assert-StatusScenario "Готова аналитика" 2.4 2.4 0 0 0 "AN"
+    Assert-StatusScenario "Готова разработка" 2.4 2.4 3.6 6 0 "DEV"
+    Assert-StatusScenario "Готова разработка (бэк)" 2.4 2.4 3.6 0 0 "BACK"
+    Assert-StatusScenario "Готова разработка (фронт)" 2.4 2.4 0 6 0 "FRONT"
+    Assert-StatusScenario "<blank>" 2.4 2.4 3.6 6 8.4 "FULL"
+    Assert-StatusScenario "Готово к релизу" 2.4 2.4 3.6 6 8.4 "FULL"
+    Assert-StatusScenario "ПРОМ" 2.4 2.4 3.6 6 8.4 "FULL"
+    Assert-StatusScenario "Отложено" 0 0 0 0 0 "NONE"
     Write-Pass "COM sheet 04 status balance and schedule"
 
     Reset-ActivePlanStatusScenario
-    $activeTable.DataBodyRange.Cells(2, 8).Value2 = "Status scenario row 2"
-    $activeTable.DataBodyRange.Cells(2, 12).Value2 = 5
-    $activeTable.DataBodyRange.Cells(1, 18).Value2 = "Готова аналитика"
+    $activeTable.DataBodyRange.Cells(1, 19).Value2 = "ПРОМ"
+    $capacitySheet.Range("E25").Value2 = 0.7
+    $excel.CalculateFull()
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-CellBlank $planSheet.Range("Z6") "Row 1 BE start for analysis-only status"
-    Assert-SameExcelDate $planSheet.Range("Z7") $planSheet.Range("X6") "Row 2 BE start after row 1 analysis-only status"
+    $deDurationAt70 = [double]$planSheet.Range("U6").Value2
+    $anDurationAt70 = [double]$planSheet.Range("V6").Value2
+    $readyAt70 = [double]$activeTable.DataBodyRange.Cells(1, 17).Value2
+    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 16).Value2) 29 "Effort with 70 percent design focus" 0.0001
+    $capacitySheet.Range("E25").Value2 = 0.5
+    $excel.CalculateFull()
+    $excel.Run("RunQuarterPlanRecalculate")
+    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 16).Value2) 30 "Effort with 50 percent design focus" 0.0001
+    Assert-NumberClose ([double]$planSheet.Range("U6").Value2) 4 "DE duration uses separate 50 percent design focus" 0.0001
+    Assert-NumberClose ([double]$planSheet.Range("V6").Value2) $anDurationAt70 "AN duration is unchanged by design focus" 0.0001
+    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 17).Value2) $readyAt70 "Ready date is unchanged by DE duration" 0.0001
+    if ([double]$planSheet.Range("U6").Value2 -le $deDurationAt70) { throw "DE duration did not increase after lowering design focus factor" }
+    $capacitySheet.Range("E25").Value2 = 0.7
+    $excel.CalculateFull()
+    Write-Pass "COM sheet 04 separate designer focus factor"
 
     Reset-ActivePlanStatusScenario
     $activeTable.DataBodyRange.Cells(2, 8).Value2 = "Status scenario row 2"
-    $activeTable.DataBodyRange.Cells(2, 11).Value2 = 2
-    $activeTable.DataBodyRange.Cells(1, 18).Value2 = "Отложено"
+    $activeTable.DataBodyRange.Cells(2, 13).Value2 = 5
+    $activeTable.DataBodyRange.Cells(1, 19).Value2 = "Готова аналитика"
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-CellBlank $planSheet.Range("X6") "Row 1 AN start for deferred status"
-    Assert-CellBlank $activeTable.DataBodyRange.Cells(1, 16) "Row 1 ready date for deferred status"
-    Assert-CellNotBlank $planSheet.Range("X7") "Row 2 AN start after row 1 deferred status"
+    Assert-CellBlank $planSheet.Range("AD6") "Row 1 BE start for analysis-only status"
+    Assert-SameExcelDate $planSheet.Range("AD7") $planSheet.Range("AB6") "Row 2 BE start is not delayed by row 1 analysis-only status"
+
+    Reset-ActivePlanStatusScenario
+    $activeTable.DataBodyRange.Cells(2, 8).Value2 = "Status scenario row 2"
+    $activeTable.DataBodyRange.Cells(2, 12).Value2 = 2
+    $activeTable.DataBodyRange.Cells(1, 19).Value2 = "Отложено"
+    $excel.Run("RunQuarterPlanRecalculate")
+    Assert-CellBlank $planSheet.Range("AB6") "Row 1 AN start for deferred status"
+    Assert-CellBlank $activeTable.DataBodyRange.Cells(1, 17) "Row 1 ready date for deferred status"
+    Assert-CellNotBlank $planSheet.Range("AB7") "Row 2 AN start after row 1 deferred status"
     Write-Pass "COM sheet 04 status resource allocation"
 
     function Clear-TeamMembersForScheduleScenario {
@@ -754,13 +858,13 @@ try {
 
     function Reset-ActivePlanResourceScenario([double]$AnEstimate) {
         for ($row = 1; $row -le $activeTable.DataBodyRange.Rows.Count; $row++) {
-            for ($col = 6; $col -le 19; $col++) {
+            for ($col = 6; $col -le 20; $col++) {
                 $activeTable.DataBodyRange.Cells($row, $col).ClearContents() | Out-Null
             }
         }
         $activeTable.DataBodyRange.Cells(1, 8).Value2 = "Resource calendar scenario"
-        $activeTable.DataBodyRange.Cells(1, 11).Value2 = $AnEstimate
-        $activeTable.DataBodyRange.Cells(1, 18).Value2 = "Готова аналитика"
+        $activeTable.DataBodyRange.Cells(1, 12).Value2 = $AnEstimate
+        $activeTable.DataBodyRange.Cells(1, 19).Value2 = "Готова аналитика"
     }
 
     for ($row = 1; $row -le $holidayTable.DataBodyRange.Rows.Count; $row++) {
@@ -772,34 +876,34 @@ try {
     Reset-ActivePlanResourceScenario 1.4
     $excel.CalculateFull()
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 15).Value2) 2 "Effort stays normalized with 50 percent allocation" 0.0001
-    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 4 "AN duration stretches with 50 percent allocation" 0.0001
-    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-06") "Ready date stretches with 50 percent allocation"
+    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 16).Value2) 2 "Effort stays normalized with 50 percent allocation" 0.0001
+    Assert-NumberClose ([double]$planSheet.Range("V6").Value2) 4 "AN duration stretches with 50 percent allocation" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 17) ([datetime]"2026-04-06") "Ready date stretches with 50 percent allocation"
 
     Clear-TeamMembersForScheduleScenario
     Set-TeamMemberForScheduleScenario 1 "Аналитик" 1 ([datetime]"2026-04-02") ([datetime]"2026-04-03")
     Reset-ActivePlanResourceScenario 2.1
     $excel.CalculateFull()
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 15).Value2) 3 "Effort stays normalized through vacation pause" 0.0001
-    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 5 "AN duration includes vacation pause without replacement" 0.0001
-    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-07") "Ready date waits for analyst vacation without replacement"
+    Assert-NumberClose ([double]$activeTable.DataBodyRange.Cells(1, 16).Value2) 3 "Effort stays normalized through vacation pause" 0.0001
+    Assert-NumberClose ([double]$planSheet.Range("V6").Value2) 5 "AN duration includes vacation pause without replacement" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 17) ([datetime]"2026-04-07") "Ready date waits for analyst vacation without replacement"
 
     Clear-TeamMembersForScheduleScenario
     Set-TeamMemberForScheduleScenario -Row 1 -Role "Аналитик" -Allocation 1 -VacationStart ([datetime]"2026-04-02") -VacationEnd ([datetime]"2026-04-03") -VacationSlot 2
     Reset-ActivePlanResourceScenario 2.1
     $excel.CalculateFull()
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 5 "AN duration includes second vacation pause" 0.0001
-    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-07") "Ready date waits for second analyst vacation"
+    Assert-NumberClose ([double]$planSheet.Range("V6").Value2) 5 "AN duration includes second vacation pause" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 17) ([datetime]"2026-04-07") "Ready date waits for second analyst vacation"
 
     Clear-TeamMembersForScheduleScenario
     Set-TeamMemberForScheduleScenario -Row 1 -Role "Аналитик" -Allocation 1 -VacationStart ([datetime]"2026-04-02") -VacationEnd ([datetime]"2026-04-03") -VacationSlot 3
     Reset-ActivePlanResourceScenario 2.1
     $excel.CalculateFull()
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 5 "AN duration includes third vacation pause" 0.0001
-    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-07") "Ready date waits for third analyst vacation"
+    Assert-NumberClose ([double]$planSheet.Range("V6").Value2) 5 "AN duration includes third vacation pause" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 17) ([datetime]"2026-04-07") "Ready date waits for third analyst vacation"
 
     Clear-TeamMembersForScheduleScenario
     Set-TeamMemberForScheduleScenario 1 "Аналитик" 1 ([datetime]"2026-04-02") ([datetime]"2026-04-03")
@@ -807,8 +911,8 @@ try {
     Reset-ActivePlanResourceScenario 2.1
     $excel.CalculateFull()
     $excel.Run("RunQuarterPlanRecalculate")
-    Assert-NumberClose ([double]$planSheet.Range("T6").Value2) 3 "AN duration uses replacement analyst during vacation" 0.0001
-    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 16) ([datetime]"2026-04-03") "Ready date uses replacement analyst during vacation"
+    Assert-NumberClose ([double]$planSheet.Range("V6").Value2) 3 "AN duration uses replacement analyst during vacation" 0.0001
+    Assert-ExcelDateEquals $activeTable.DataBodyRange.Cells(1, 17) ([datetime]"2026-04-03") "Ready date uses replacement analyst during vacation"
     Write-Pass "COM sheet 04 allocation and all vacation slots scheduling"
 
     $analyticsFormatFound = $false
@@ -817,28 +921,28 @@ try {
     $frontendBeFormatFound = $false
     $frontendQaFormatFound = $false
     $deferredFormatFound = $false
-    foreach ($condition in @($planSheet.Range("L6:N25").FormatConditions)) {
+    foreach ($condition in @($planSheet.Range("M6:O25").FormatConditions)) {
         if ([string]$condition.Formula1 -like "*Готова аналитика*") { $analyticsFormatFound = $true }
     }
-    foreach ($condition in @($planSheet.Range("N6:N25").FormatConditions)) {
+    foreach ($condition in @($planSheet.Range("O6:O25").FormatConditions)) {
         if ([string]$condition.Formula1 -like "*Готова разработка`"*") { $devFormatFound = $true }
         if ([string]$condition.Formula1 -like "*Готова разработка (фронт)*") { $frontendQaFormatFound = $true }
     }
-    foreach ($condition in @($planSheet.Range("M6:N25").FormatConditions)) {
+    foreach ($condition in @($planSheet.Range("N6:O25").FormatConditions)) {
         if ([string]$condition.Formula1 -like "*Готова разработка (бэк)*") { $backendFormatFound = $true }
     }
-    foreach ($condition in @($planSheet.Range("L6:L25").FormatConditions)) {
+    foreach ($condition in @($planSheet.Range("M6:M25").FormatConditions)) {
         if ([string]$condition.Formula1 -like "*Готова разработка (фронт)*") { $frontendBeFormatFound = $true }
     }
-    foreach ($condition in @($planSheet.Range("K6:N25").FormatConditions)) {
+    foreach ($condition in @($planSheet.Range("K6:O25").FormatConditions)) {
         if ([string]$condition.Formula1 -like "*Отложено*") { $deferredFormatFound = $true }
     }
-    if (!$analyticsFormatFound) { throw "Analysis-ready conditional format not found on L6:N25" }
-    if (!$devFormatFound) { throw "Dev-ready conditional format not found on N6:N25" }
-    if (!$backendFormatFound) { throw "Backend-ready conditional format not found on M6:N25" }
-    if (!$frontendBeFormatFound) { throw "Frontend-ready BE conditional format not found on L6:L25" }
-    if (!$frontendQaFormatFound) { throw "Frontend-ready QA conditional format not found on N6:N25" }
-    if (!$deferredFormatFound) { throw "Deferred conditional format not found on K6:N25" }
+    if (!$analyticsFormatFound) { throw "Analysis-ready conditional format not found on M6:O25" }
+    if (!$devFormatFound) { throw "Dev-ready conditional format not found on O6:O25" }
+    if (!$backendFormatFound) { throw "Backend-ready conditional format not found on N6:O25" }
+    if (!$frontendBeFormatFound) { throw "Frontend-ready BE conditional format not found on M6:M25" }
+    if (!$frontendQaFormatFound) { throw "Frontend-ready QA conditional format not found on O6:O25" }
+    if (!$deferredFormatFound) { throw "Deferred conditional format not found on K6:O25" }
     Write-Pass "COM sheet 04 excluded estimate formatting"
 
     $excel.Run("RunTaskEstimateRepairActionButtons")
@@ -855,8 +959,8 @@ try {
     }
     $expectedAnchors = @{
         "btnQuarterPlanReloadBacklog" = "G2"
-        "btnQuarterPlanRecalculate" = "P2"
-        "btnQuarterPlanExportBacklog" = "Q2"
+        "btnQuarterPlanRecalculate" = "Q2"
+        "btnQuarterPlanExportBacklog" = "R2"
         "btnQuarterPlanAddAllBacklog" = [string]$workbookLayout.backlog.actionCell
         "btnJqlA" = [string]$workbookLayout.activePlan.jqlActionCell
         "btnJqlG" = [string]$workbookLayout.greyZone.jqlActionCell
@@ -898,7 +1002,8 @@ try {
         $activeTable.DataBodyRange.Cells($row, 12).Value2 = 3
         $activeTable.DataBodyRange.Cells($row, 13).Value2 = 5
         $activeTable.DataBodyRange.Cells($row, 14).Value2 = 7
-        $activeTable.DataBodyRange.Cells($row, 18).Value2 = [string]$fixture.Status
+        $activeTable.DataBodyRange.Cells($row, 15).Value2 = 11
+        $activeTable.DataBodyRange.Cells($row, 19).Value2 = [string]$fixture.Status
     }
     $excel.Run("RunQuarterPlanExportBacklogPath", $backlogExportPath)
     if (!(Test-Path -LiteralPath $backlogExportPath)) {
@@ -910,36 +1015,39 @@ try {
         Assert-TextEquals ([string]$backlogExportSheet.Cells(1, 5).Text) "Емкость" "Quarter plan export capacity label"
         Assert-TextEquals ([string]$backlogExportSheet.Cells(2, 5).Text) "План+риск" "Quarter plan export planned with risk label"
         Assert-TextEquals ([string]$backlogExportSheet.Cells(3, 5).Text) "Баланс" "Quarter plan export balance label"
-        foreach ($statCol in 6..9) {
+        foreach ($statCol in 6..10) {
             Assert-CellNotBlank $backlogExportSheet.Cells(1, $statCol) "Quarter plan export capacity value column $statCol"
             Assert-CellNotBlank $backlogExportSheet.Cells(2, $statCol) "Quarter plan export planned with risk value column $statCol"
             Assert-CellNotBlank $backlogExportSheet.Cells(3, $statCol) "Quarter plan export balance value column $statCol"
         }
         Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 1).Text) "Приоритет" "Quarter plan export first header"
         Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 3).Text) "Описание" "Quarter plan export description header"
-        Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 10).Text) "Трудозатраты" "Quarter plan export effort header"
-        Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 11).Text) "Завершение (план)" "Quarter plan export ready date header"
-        Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 14).Text) "Комментарий" "Quarter plan export last header"
+        Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 11).Text) "Трудозатраты" "Quarter plan export effort header"
+        Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 12).Text) "Завершение (план)" "Quarter plan export ready date header"
+        Assert-TextEquals ([string]$backlogExportSheet.Cells(5, 15).Text) "Комментарий" "Quarter plan export last header"
         Assert-TextEquals ([string]$backlogExportSheet.Cells(6, 3).Text) $taskExpectedDescription "Quarter plan export first task description"
-        if (![string]::IsNullOrWhiteSpace([string]$backlogExportSheet.Cells(5, 15).Text)) {
-            throw "Quarter plan export contains an unexpected column after F:S user data"
+        if (![string]::IsNullOrWhiteSpace([string]$backlogExportSheet.Cells(5, 16).Text)) {
+            throw "Quarter plan export contains an unexpected column after F:T user data"
         }
         if ([string]$backlogExportSheet.Cells(5, 1).Text -eq "+") {
             throw "Quarter plan export contains action columns"
         }
-        Assert-Strikethrough $backlogExportSheet.Cells(6, 6) $false "Analysis-ready exported AN"
-        Assert-Strikethrough $backlogExportSheet.Cells(6, 7) $true "Analysis-ready exported BE"
-        Assert-Strikethrough $backlogExportSheet.Cells(6, 8) $true "Analysis-ready exported FE"
-        Assert-Strikethrough $backlogExportSheet.Cells(6, 9) $true "Analysis-ready exported QA"
-        Assert-Strikethrough $backlogExportSheet.Cells(7, 6) $false "Backend-ready exported AN"
-        Assert-Strikethrough $backlogExportSheet.Cells(7, 7) $false "Backend-ready exported BE"
-        Assert-Strikethrough $backlogExportSheet.Cells(7, 8) $true "Backend-ready exported FE"
-        Assert-Strikethrough $backlogExportSheet.Cells(7, 9) $true "Backend-ready exported QA"
-        Assert-Strikethrough $backlogExportSheet.Cells(8, 6) $false "Frontend-ready exported AN"
-        Assert-Strikethrough $backlogExportSheet.Cells(8, 7) $true "Frontend-ready exported BE"
-        Assert-Strikethrough $backlogExportSheet.Cells(8, 8) $false "Frontend-ready exported FE"
-        Assert-Strikethrough $backlogExportSheet.Cells(8, 9) $true "Frontend-ready exported QA"
-        foreach ($estimateCol in 6..9) {
+        Assert-Strikethrough $backlogExportSheet.Cells(6, 6) $false "Analysis-ready exported DE"
+        Assert-Strikethrough $backlogExportSheet.Cells(6, 7) $false "Analysis-ready exported AN"
+        Assert-Strikethrough $backlogExportSheet.Cells(6, 8) $true "Analysis-ready exported BE"
+        Assert-Strikethrough $backlogExportSheet.Cells(6, 9) $true "Analysis-ready exported FE"
+        Assert-Strikethrough $backlogExportSheet.Cells(6, 10) $true "Analysis-ready exported QA"
+        Assert-Strikethrough $backlogExportSheet.Cells(7, 6) $false "Backend-ready exported DE"
+        Assert-Strikethrough $backlogExportSheet.Cells(7, 7) $false "Backend-ready exported AN"
+        Assert-Strikethrough $backlogExportSheet.Cells(7, 8) $false "Backend-ready exported BE"
+        Assert-Strikethrough $backlogExportSheet.Cells(7, 9) $true "Backend-ready exported FE"
+        Assert-Strikethrough $backlogExportSheet.Cells(7, 10) $true "Backend-ready exported QA"
+        Assert-Strikethrough $backlogExportSheet.Cells(8, 6) $false "Frontend-ready exported DE"
+        Assert-Strikethrough $backlogExportSheet.Cells(8, 7) $false "Frontend-ready exported AN"
+        Assert-Strikethrough $backlogExportSheet.Cells(8, 8) $true "Frontend-ready exported BE"
+        Assert-Strikethrough $backlogExportSheet.Cells(8, 9) $false "Frontend-ready exported FE"
+        Assert-Strikethrough $backlogExportSheet.Cells(8, 10) $true "Frontend-ready exported QA"
+        foreach ($estimateCol in 6..10) {
             Assert-Strikethrough $backlogExportSheet.Cells(9, $estimateCol) $true "Deferred exported estimate column $estimateCol"
         }
     } finally {
@@ -977,7 +1085,7 @@ try {
     $excel.Run("'" + $workbook.Name + "'!ThisWorkbook.AssertJqlForTableNameForTest", "tblPlanBacklog", "issuekey in (BACK-1)")
     Write-Pass "COM JQL generation"
 
-    $referencesSheet = $workbook.Worksheets.Item("99_Справочники")
+    $referencesSheet = $workbook.Worksheets.Item("99_Правила планирования")
     $jqlClipboardCell = $referencesSheet.Range([string]$workbookLayout.references.jqlClipboardCell)
     $jqlClipboardCell.EntireColumn.Hidden = $true
     $workbook.Saved = $true

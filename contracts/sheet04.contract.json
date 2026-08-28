@@ -3,7 +3,7 @@
     "tblPlanBacklog": { "layout": "backlog.tableRange" }
   },
   "requiredCells": {
-    "Q2": "Экспорт плана"
+    "R2": "Экспорт плана"
   },
   "requiredLayoutCells": {
     "activePlan.jqlActionCell": "JQL",
@@ -11,5 +11,5 @@
     "backlog.actionCell": "++",
     "backlog.jqlActionCell": "JQL"
   },
-  "visibleColumns": ["T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"]
+  "visibleColumns": ["U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF", "AG", "AH", "AI", "AJ"]
 }

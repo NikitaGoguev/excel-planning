@@ -215,6 +215,32 @@ export function buildCapacitySheet(context) {
     wrapText: true,
   };
 
+  capacity.getRange("C23:G25").values = [
+    ["Количество дизайнеров", null, "", "", ""],
+    ["Отпуска дизайнеров", null, "", "", ""],
+    ["Фокус-фактор дизайнеров", null, testData.capacity?.designFocusFactor ?? 0.7, "", ""],
+  ];
+  capacity.getRange("C23:D25").merge(true);
+  capacity.getRange("E23:E24").formulas = [["=IF(G23=\"\",F23,G23)"], ["=IF(G24=\"\",F24,G24)"]];
+  capacity.getRange("F23:F24").formulas = [
+    [teamMemberAllocationSumFormula("Дизайнер")],
+    [teamMemberVacationSumFormula("Дизайнер")],
+  ];
+  capacity.getRange("E23:G24").setNumberFormat("0.00");
+  capacity.getRange("E25").setNumberFormat("0%");
+  addNonNegativeValidation(capacity.getRange("E23:E24"));
+  addNonNegativeValidation(capacity.getRange("G23:G24"));
+  addDecimalValidation(capacity.getRange("E25"), 0, 1);
+  capacity.getRange("F25:M25").merge();
+  capacity.getRange("F25").values = [["- заполняется вручную для дизайнеров, рекомендуемое значение - 70%"]];
+  capacity.getRange("F25:M25").format = {
+    fill: colors.technical,
+    font: fontStyle({ color: colors.mutedText }),
+    horizontalAlignment: "left",
+    verticalAlignment: "center",
+    wrapText: true,
+  };
+
   capacity.getRange("E26:F26").values = [["ч/д", "ч/ч"]];
   applyHeader(capacity.getRange("E26:F26"));
   capacity.getRange("C26:D26").format = {
@@ -281,6 +307,19 @@ export function buildCapacitySheet(context) {
     ],
   ];
   capacity.getRange("E32:F32").formulas = [[`=SUM(E27:E30)`, `=SUM(F27:F30)`]];
+  capacity.getRange("C34:F35").values = [
+    ["Capacity по дизайнерам", null, "", ""],
+    ["Общее Capacity с дизайнерами", null, "", ""],
+  ];
+  capacity.getRange("C34:D35").merge(true);
+  capacity.getRange("E34:F35").formulas = [
+    [
+      `=IFERROR(ROUNDDOWN((E7*E23-E24)*E25,0),0)`,
+      `=IFERROR(E34*${sheetRef(SHEET_SETTINGS)}!B$8,0)`,
+    ],
+    ["=E32+E34", "=F32+F34"],
+  ];
+  capacity.getRange("E34:F35").setNumberFormat("0.00");
   for (let row = 2; row <= 4; row += 1) {
     applyCapacityRangeStyle(capacity.getRange(`C${row}:D${row}`), colors.section);
     applyCapacityRangeStyle(capacity.getRange(`E${row}:J${row}`), colors.white, "center");
@@ -294,6 +333,11 @@ export function buildCapacitySheet(context) {
     applyCapacityRangeStyle(capacity.getRange(`C${row}:D${row}`), colors.white);
     applyCapacityRangeStyle(capacity.getRange(`E${row}:E${row}`), colors.white);
   }
+  for (let row = 23; row <= 25; row += 1) {
+    applyCapacityRangeStyle(capacity.getRange(`C${row}:D${row}`), colors.technical);
+    applyCapacityRangeStyle(capacity.getRange(`E${row}:G${row}`), colors.technical, "right");
+  }
+  capacity.getRange("F25:M25").format.horizontalAlignment = "left";
   applyCapacityRangeStyle(capacity.getRange("C26:D26"), colors.white);
   applyCapacityRangeStyle(capacity.getRange("E26:F26"), colors.header, "center", true);
   for (let row = 27; row <= 30; row += 1) {
@@ -302,6 +346,10 @@ export function buildCapacitySheet(context) {
   }
   applyCapacityRangeStyle(capacity.getRange("C32:D32"), colors.section);
   applyCapacityRangeStyle(capacity.getRange("E32:F32"), colors.calculated, "right");
+  for (let row = 34; row <= 35; row += 1) {
+    applyCapacityRangeStyle(capacity.getRange(`C${row}:D${row}`), colors.technical);
+    applyCapacityRangeStyle(capacity.getRange(`E${row}:F${row}`), colors.technical, "right");
+  }
   capacity.freezePanes.freezeRows(6);
   setWidths(capacity, {
     A: 40,

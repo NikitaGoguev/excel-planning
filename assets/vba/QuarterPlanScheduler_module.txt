@@ -10,6 +10,7 @@ Private Const QPS_TASK_AN As Long = 3
 Private Const QPS_TASK_BE As Long = 4
 Private Const QPS_TASK_FE As Long = 5
 Private Const QPS_TASK_QA As Long = 6
+Private Const QPS_TASK_DE As Long = 7
 
 Private Const QPS_OUT_EFFORT As Long = 1
 Private Const QPS_OUT_READY As Long = 2
@@ -26,8 +27,11 @@ Private Const QPS_OUT_FE_FINISH As Long = 12
 Private Const QPS_OUT_QA_START As Long = 13
 Private Const QPS_OUT_QA_FINISH As Long = 14
 Private Const QPS_OUT_DIAGNOSTIC As Long = 15
+Private Const QPS_OUT_DE_DAYS As Long = 16
+Private Const QPS_OUT_DE_START As Long = 17
+Private Const QPS_OUT_DE_FINISH As Long = 18
 
-Public Function QuarterPlanSchedule(ByVal tasks As Variant, ByVal resources As Variant, ByVal holidays As Variant, ByVal rules As Variant, ByVal firstWorkDate As Date, ByVal focusFactor As Double) As Variant
+Public Function QuarterPlanSchedule(ByVal tasks As Variant, ByVal resources As Variant, ByVal holidays As Variant, ByVal rules As Variant, ByVal firstWorkDate As Date, ByVal focusFactor As Double, Optional ByVal designFocusFactor As Double = 0.7) As Variant
     Dim output() As Variant
     Dim state As Variant
     Dim rowCount As Long
@@ -39,23 +43,24 @@ Public Function QuarterPlanSchedule(ByVal tasks As Variant, ByVal resources As V
         Exit Function
     End If
 
-    ReDim output(1 To rowCount, 1 To QPS_OUT_DIAGNOSTIC)
+    ReDim output(1 To rowCount, 1 To QPS_OUT_DE_FINISH)
     state = QPInitializeResourceState(resources, firstWorkDate)
 
     For rowIndex = 1 To rowCount
         If QPTruthy(tasks(rowIndex, QPS_TASK_PRESENT)) Then
-            QPScheduleTask tasks, rowIndex, state, holidays, rules, firstWorkDate, focusFactor, output
+            QPScheduleTask tasks, rowIndex, state, holidays, rules, firstWorkDate, focusFactor, designFocusFactor, output
         End If
     Next rowIndex
 
     QuarterPlanSchedule = output
 End Function
 
-Private Sub QPScheduleTask(ByRef tasks As Variant, ByVal rowIndex As Long, ByRef state As Variant, ByRef holidays As Variant, ByRef rules As Variant, ByVal firstWorkDate As Date, ByVal focusFactor As Double, ByRef output() As Variant)
+Private Sub QPScheduleTask(ByRef tasks As Variant, ByVal rowIndex As Long, ByRef state As Variant, ByRef holidays As Variant, ByRef rules As Variant, ByVal firstWorkDate As Date, ByVal focusFactor As Double, ByVal designFocusFactor As Double, ByRef output() As Variant)
     Dim statusCode As String
     Dim includeBe As Boolean, includeFe As Boolean, includeQa As Boolean
     Dim estimate(1 To 4) As Double, baseDays(1 To 4) As Long
     Dim startDate(1 To 4) As Date, finishDate(1 To 4) As Date, actualDays(1 To 4) As Long
+    Dim deEstimate As Double, deBaseDays As Long, deStart As Date, deFinish As Date, deActualDays As Long, deUnusedReady As Date
     Dim anReady As Date, beReady As Date, feReady As Date, qaFirstReady As Date, qaSecondReady As Date
     Dim beProgressReady As Date, anProgressReady As Date, unusedReady As Date
     Dim latestDev As Date, latestPreQa As Date, finalFinish As Date
@@ -76,7 +81,14 @@ Private Sub QPScheduleTask(ByRef tasks As Variant, ByVal rowIndex As Long, ByRef
         baseDays(index) = QPPlannedDuration(estimate(index), focusFactor)
         output(rowIndex, QPS_OUT_EFFORT) = QPNumber(output(rowIndex, QPS_OUT_EFFORT)) + baseDays(index)
     Next index
+    deEstimate = QPTaskNumber(tasks, rowIndex, QPS_TASK_DE)
+    deBaseDays = QPPlannedDuration(deEstimate, designFocusFactor)
+    output(rowIndex, QPS_OUT_EFFORT) = QPNumber(output(rowIndex, QPS_OUT_EFFORT)) + deBaseDays
     If statusCode = "DEFER" Then Exit Sub
+    If deEstimate > 0 And designFocusFactor <= 0 Then
+        output(rowIndex, QPS_OUT_DIAGNOSTIC) = "Design focus factor is missing or <= 0."
+        Exit Sub
+    End If
     If Not includeBe Then baseDays(2) = 0
     If Not includeFe Then baseDays(3) = 0
     If Not includeQa Then baseDays(4) = 0
@@ -91,12 +103,16 @@ Private Sub QPScheduleTask(ByRef tasks As Variant, ByVal rowIndex As Long, ByRef
     If baseDays(2) > 0 And QPResourceCount(state, "BE") = 0 Then diagnostic = QPAppend(diagnostic, "No BE resources.")
     If baseDays(3) > 0 And QPResourceCount(state, "FE") = 0 Then diagnostic = QPAppend(diagnostic, "No FE resources.")
     If baseDays(4) > 0 And QPResourceCount(state, "QA") = 0 Then diagnostic = QPAppend(diagnostic, "No QA resources.")
+    If deBaseDays > 0 And QPResourceCount(state, "DE") = 0 Then diagnostic = QPAppend(diagnostic, "No DE resources.")
     If diagnostic <> "" Then
         output(rowIndex, QPS_OUT_DIAGNOSTIC) = diagnostic
         Exit Sub
     End If
 
     anReady = QPNextWorkdayOnOrAfter(firstWorkDate, holidays)
+    If deBaseDays > 0 Then
+        QPAllocateStage state, "DE", anReady, deEstimate, designFocusFactor, holidays, 0, deStart, deFinish, deActualDays, deUnusedReady
+    End If
     If baseDays(1) > 0 Then
         QPAllocateStage state, "AN", anReady, estimate(1), focusFactor, holidays, QPProgressThreshold(baseDays(1), anBeMin, anBePercent, focusFactor, estimate(1)), startDate(1), finishDate(1), actualDays(1), anProgressReady
         latestPreQa = finishDate(1)
@@ -172,6 +188,9 @@ WriteResult:
         If startDate(index) <> 0 Then output(rowIndex, QPS_OUT_AN_START + ((index - 1) * 2)) = startDate(index)
         If finishDate(index) <> 0 Then output(rowIndex, QPS_OUT_AN_FINISH + ((index - 1) * 2)) = finishDate(index)
     Next index
+    If deActualDays > 0 Then output(rowIndex, QPS_OUT_DE_DAYS) = deActualDays
+    If deStart <> 0 Then output(rowIndex, QPS_OUT_DE_START) = deStart
+    If deFinish <> 0 Then output(rowIndex, QPS_OUT_DE_FINISH) = deFinish
 End Sub
 
 Private Function QPInitializeResourceState(ByRef resources As Variant, ByVal firstWorkDate As Date) As Variant
@@ -305,6 +324,18 @@ Private Function QPMatrixRows(ByRef value As Variant) As Long
     On Error GoTo SafeExit
     QPMatrixRows = UBound(value, 1) - LBound(value, 1) + 1
 SafeExit:
+End Function
+
+Private Function QPMatrixCols(ByRef value As Variant) As Long
+    If Not IsArray(value) Then Exit Function
+    On Error GoTo SafeExit
+    QPMatrixCols = UBound(value, 2) - LBound(value, 2) + 1
+SafeExit:
+End Function
+
+Private Function QPTaskNumber(ByRef tasks As Variant, ByVal rowIndex As Long, ByVal colIndex As Long) As Double
+    If QPMatrixCols(tasks) < colIndex Then Exit Function
+    QPTaskNumber = QPNumber(tasks(rowIndex, colIndex))
 End Function
 
 Private Function QPNumber(ByVal value As Variant) As Double

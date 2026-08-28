@@ -30,11 +30,11 @@ test("default limits reproduce the v1.0.0 layout", () => {
   assert.equal(layout.holidays.tableRange, "A13:D33");
   assert.equal(layout.taskEstimates.tableRange, "C3:M103");
   assert.equal(layout.taskEstimates.jqlActionCell, "F2");
-  assert.equal(layout.activePlan.tableRange, "A5:S25");
+  assert.equal(layout.activePlan.tableRange, "A5:T25");
   assert.equal(layout.activePlan.jqlActionCell, "I4");
-  assert.equal(layout.greyZone.tableRange, "A30:S50");
+  assert.equal(layout.greyZone.tableRange, "A30:T50");
   assert.equal(layout.greyZone.jqlActionCell, "I29");
-  assert.equal(layout.backlog.tableRange, "A55:S155");
+  assert.equal(layout.backlog.tableRange, "A55:T155");
   assert.equal(layout.backlog.actionCell, "A54");
   assert.equal(layout.backlog.jqlActionCell, "I54");
   assert.equal(layout.references.jqlClipboardCell, "Z1");
@@ -47,13 +47,13 @@ test("alternate limits derive every structural section", () => {
   assert.equal(layout.holidays.tableRange, "A13:D18");
   assert.equal(layout.taskEstimates.tableRange, "C3:M11");
   assert.equal(layout.taskEstimates.jqlActionCell, "F2");
-  assert.equal(layout.activePlan.tableRange, "A5:S8");
+  assert.equal(layout.activePlan.tableRange, "A5:T8");
   assert.equal(layout.activePlan.jqlActionCell, "I4");
-  assert.equal(layout.greyZone.tableRange, "A13:S15");
+  assert.equal(layout.greyZone.tableRange, "A13:T15");
   assert.equal(layout.greyZone.jqlActionCell, "I12");
   assert.equal(layout.backlog.actionCell, "A19");
   assert.equal(layout.backlog.jqlActionCell, "I19");
-  assert.equal(layout.backlog.tableRange, "A20:S28");
+  assert.equal(layout.backlog.tableRange, "A20:T28");
 });
 
 test("invalid limits fail closed", () => {
@@ -92,9 +92,9 @@ test("alternate limits build resizes all structural sections", async () => {
     assert.equal(workbook.getWorksheet("00_Настройки").getTable("tblTeamMembers").table.tableRef, "A23:L27");
     assert.equal(workbook.getWorksheet("01_Настройки квартала").getTable("tblHolidays").table.tableRef, "A13:D18");
     assert.equal(workbook.getWorksheet("03_Оценка задач").getTable("tblTaskEstimates").table.tableRef, "C3:M11");
-    assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanActive").table.tableRef, "A5:S8");
-    assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanGrey").table.tableRef, "A13:S15");
-    assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanBacklog").table.tableRef, "A20:S28");
+    assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanActive").table.tableRef, "A5:T8");
+    assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanGrey").table.tableRef, "A13:T15");
+    assert.equal(workbook.getWorksheet("04_Квартальный план").getTable("tblPlanBacklog").table.tableRef, "A20:T28");
     assert.equal(workbook.getWorksheet("03_Оценка задач").getCell("D2").value, "Импорт CSV (до 8)");
     assert.equal(workbook.getWorksheet("03_Оценка задач").getCell("F2").value, "JQL");
     assert.equal(workbook.getWorksheet("04_Квартальный план").getCell("A19").value, "++");

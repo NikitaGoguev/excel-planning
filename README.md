@@ -6,7 +6,7 @@
 
 > Excel-based quarterly capacity and delivery planning for IT teams. QuarterPlan Excel combines employee-level availability, vacations, allocations, stage overlap and VBA automation in a reproducible workbook-as-code project.
 
-**QuarterPlan Excel** помогает ИТ-лиду собрать квартальный план из оценок AN/BE/FE/QA, учесть состав команды и отпуска, проверить баланс ресурсов и получить календарные даты этапов.
+**QuarterPlan Excel** помогает ИТ-лиду собрать квартальный план из оценок DE/AN/BE/FE/QA, учесть состав команды и отпуска, проверить баланс ресурсов и получить календарные даты этапов.
 
 ## Скачать
 
@@ -42,9 +42,10 @@
 
 ## Возможности
 
-- расчёт capacity по AN, BE, FE и QA;
+- расчёт capacity по DE, AN, BE, FE и QA;
+- отдельный фокус-фактор дизайнеров; DE стартует параллельно с AN и не задерживает последующие этапы;
 - аллокации и до трёх периодов отпуска на сотрудника;
-- настраиваемые overlap-правила AN → BE → FE → QA;
+- настраиваемые overlap-правила AN → BE → FE → QA и независимое планирование DE;
 - ресурсный баланс активного плана с настраиваемым риском;
 - статусы готовности, управляющие потреблением этапов;
 - импорт CSV/XLSX, декомпозиция и express-estimate export;

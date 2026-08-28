@@ -296,6 +296,7 @@ Public Function ImportTaskEstimatesXlsxFile(ByVal xlsxPath As String, ByVal show
     Dim oldEnableEvents As Boolean
     Dim oldScreenUpdating As Boolean
     Dim oldDisplayAlerts As Boolean
+    Dim legacyFormat As Boolean
 
     oldEnableEvents = Application.EnableEvents
     oldScreenUpdating = Application.ScreenUpdating
@@ -315,7 +316,7 @@ Public Function ImportTaskEstimatesXlsxFile(ByVal xlsxPath As String, ByVal show
 
     Set importWb = Application.Workbooks.Open(Filename:=xlsxPath, UpdateLinks:=0, ReadOnly:=True)
     Set importWs = importWb.Worksheets(1)
-    ValidateTaskEstimateXlsxHeaders importWs
+    legacyFormat = ValidateTaskEstimateXlsxHeaders(importWs)
 
     lastImportRow = LastTaskEstimateImportXlsxRow(importWs)
     If lastImportRow < 2 Then Err.Raise 5, , "XLSX file has no task rows to import."
@@ -342,9 +343,21 @@ Public Function ImportTaskEstimatesXlsxFile(ByVal xlsxPath As String, ByVal show
 
         importedCount = importedCount + 1
         importedLevels(importedCount) = taskLevel
-        For colIndex = EST_COL_PRIORITY To EST_COL_COMMENT
-            importedValues(importedCount, colIndex) = importWs.Cells(rowIndex, colIndex).Value
-        Next colIndex
+        If legacyFormat Then
+            For colIndex = EST_COL_PRIORITY To EST_COL_NOTE
+                importedValues(importedCount, colIndex) = importWs.Cells(rowIndex, colIndex).Value
+            Next colIndex
+            importedValues(importedCount, EST_COL_DE) = ""
+            importedValues(importedCount, EST_COL_AN) = importWs.Cells(rowIndex, 6).Value
+            importedValues(importedCount, EST_COL_BE) = importWs.Cells(rowIndex, 7).Value
+            importedValues(importedCount, EST_COL_FE) = importWs.Cells(rowIndex, 8).Value
+            importedValues(importedCount, EST_COL_QA) = importWs.Cells(rowIndex, 9).Value
+            importedValues(importedCount, EST_COL_COMMENT) = importWs.Cells(rowIndex, 10).Value
+        Else
+            For colIndex = EST_COL_PRIORITY To EST_COL_COMMENT
+                importedValues(importedCount, colIndex) = importWs.Cells(rowIndex, colIndex).Value
+            Next colIndex
+        End If
         previousLevel = taskLevel
     Next rowIndex
 
@@ -406,19 +419,29 @@ Fail:
     Resume SafeExit
 End Function
 
-Public Sub ValidateTaskEstimateXlsxHeaders(ByVal importWs As Worksheet)
-    Dim expectedHeaders As Variant
-    Dim index As Long
-    Dim actualValue As String
+Public Function ValidateTaskEstimateXlsxHeaders(ByVal importWs As Worksheet) As Boolean
+    Dim currentHeaders As Variant
+    Dim legacyHeaders As Variant
 
-    expectedHeaders = TaskEstimateVisibleHeaders()
+    currentHeaders = TaskEstimateVisibleHeaders()
+    If TaskEstimateHeadersMatch(importWs, currentHeaders) Then Exit Function
+
+    legacyHeaders = TaskEstimateLegacyVisibleHeaders()
+    If TaskEstimateHeadersMatch(importWs, legacyHeaders) Then
+        ValidateTaskEstimateXlsxHeaders = True
+        Exit Function
+    End If
+
+    Err.Raise 5, , "Unexpected XLSX task estimate headers."
+End Function
+
+Private Function TaskEstimateHeadersMatch(ByVal importWs As Worksheet, ByVal expectedHeaders As Variant) As Boolean
+    Dim index As Long
     For index = LBound(expectedHeaders) To UBound(expectedHeaders)
-        actualValue = Trim$(CStr(importWs.Cells(1, index + 1).Value))
-        If actualValue <> CStr(expectedHeaders(index)) Then
-            Err.Raise 5, , "Unexpected XLSX header in column " & CStr(index + 1) & ": " & actualValue
-        End If
+        If Trim$(CStr(importWs.Cells(1, index + 1).Value)) <> CStr(expectedHeaders(index)) Then Exit Function
     Next index
-End Sub
+    TaskEstimateHeadersMatch = True
+End Function
 
 Public Function LastTaskEstimateImportXlsxRow(ByVal importWs As Worksheet) As Long
     Dim rowIndex As Long
@@ -494,7 +517,7 @@ Public Function ExportQuarterPlanBacklogToXlsxFile(ByVal exportPath As String, B
     exportWs.Cells.Font.Size = DESIGN_FONT_SIZE
 
     exportWs.Range(exportWs.Cells(1, 5), exportWs.Cells(3, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1)).Value = _
-        ws.Range("J2:N4").Value
+        ws.Range("J2:O4").Value
 
     With exportWs.Range(exportWs.Cells(1, 5), exportWs.Cells(3, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1))
         .Font.Name = DESIGN_FONT_NAME
@@ -547,7 +570,7 @@ Public Function ExportQuarterPlanBacklogToXlsxFile(ByVal exportPath As String, B
         .HorizontalAlignment = xlCenter
     End With
     exportWs.Range(exportWs.Cells(taskHeaderRow, 1), exportWs.Cells(outRow - 1, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1)).Borders.LineStyle = xlContinuous
-    exportWs.Range(exportWs.Cells(taskFirstDataRow, PLAN_COL_AN - PLAN_COL_DATA_FIRST + 1), exportWs.Cells(outRow - 1, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1)).NumberFormat = "0.00"
+    exportWs.Range(exportWs.Cells(taskFirstDataRow, PLAN_COL_DE - PLAN_COL_DATA_FIRST + 1), exportWs.Cells(outRow - 1, PLAN_COL_QA - PLAN_COL_DATA_FIRST + 1)).NumberFormat = "0.00"
     ApplyDateFormat exportWs.Range(exportWs.Cells(taskFirstDataRow, PLAN_COL_READY_DATE - PLAN_COL_DATA_FIRST + 1), exportWs.Cells(outRow - 1, PLAN_COL_READY_DATE - PLAN_COL_DATA_FIRST + 1))
     exportWs.Range(exportWs.Cells(taskHeaderRow, 1), exportWs.Cells(taskHeaderRow, PLAN_COL_DATA_LAST - PLAN_COL_DATA_FIRST + 1)).AutoFilter
 
@@ -592,6 +615,7 @@ Public Sub ApplyQuarterPlanExportExcludedEstimateStyle(ByVal exportWs As Workshe
     End If
 
     If statusText = PLAN_STATUS_DEFERRED Then
+        MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_DE - PLAN_COL_DATA_FIRST + 1)
         MarkQuarterPlanExportExcludedEstimate exportWs.Cells(exportRow, PLAN_COL_AN - PLAN_COL_DATA_FIRST + 1)
     End If
 End Sub
@@ -778,7 +802,7 @@ Public Sub FillExpressEstimateRow(ByVal exportWs As Worksheet, ByVal targetRow A
     End Select
 
     WriteExpressEstimateValue exportWs.Range("G" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_AN).Value
-    exportWs.Range("H" & CStr(targetRow)).ClearContents
+    WriteExpressEstimateValue exportWs.Range("H" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_DE).Value
     WriteExpressEstimateValue exportWs.Range("I" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_BE).Value
     WriteExpressEstimateValue exportWs.Range("J" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_FE).Value
     WriteExpressEstimateValue exportWs.Range("K" & CStr(targetRow)), tbl.DataBodyRange.Cells(sourceRow, EST_COL_QA).Value

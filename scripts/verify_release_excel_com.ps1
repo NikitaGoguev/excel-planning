@@ -127,7 +127,7 @@ try {
     $activeTickets.ClearContents()
     $activeTickets.Cells(1, 1).Value2 = "REL-1"
     $activeTickets.Cells(2, 1).Value2 = "REL-2"
-    $referencesSheet = $workbook.Worksheets.Item("99_Справочники")
+    $referencesSheet = $workbook.Worksheets.Item("99_Правила планирования")
     $jqlClipboardCell = $referencesSheet.Range([string]$workbookLayout.references.jqlClipboardCell)
     $jqlClipboardCell.EntireColumn.Hidden = $true
     $workbook.Saved = $true

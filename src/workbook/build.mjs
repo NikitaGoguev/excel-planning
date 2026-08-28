@@ -149,7 +149,7 @@ await fs.mkdir(path.dirname(outputPath), { recursive: true });
 await appendWorksheetFromFile(workbook.raw, expressEstimateTemplatePath, SHEET_EXPRESS_TEMPLATE);
 const lists = workbook.worksheets.add(SHEET_LISTS);
 lists.showGridLines = false;
-buildListsSheet({ ...sheetContext, lists });
+buildListsSheet({ ...sheetContext, lists, quarterPlanStatuses });
 await workbook.raw.xlsx.writeFile(outputPath);
 await allowBlankInDataValidations(outputPath);
 await applyHiddenFilterButtons(outputPath);

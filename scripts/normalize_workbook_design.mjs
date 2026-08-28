@@ -9,9 +9,9 @@ const HIDDEN_FILTER_BUTTONS = {
   tblTeamMembers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
   tblHolidays: [1, 2, 3, 4],
   tblTaskEstimates: [5, 6, 7, 8, 9, 10, 11],
-  tblPlanActive: [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-  tblPlanGrey: [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-  tblPlanBacklog: [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+  tblPlanActive: [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  tblPlanGrey: [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+  tblPlanBacklog: [1, 2, 3, 4, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
 };
 
 function xmlAttr(xml, attrName) {

@@ -141,7 +141,7 @@ Private Function TryRunQuarterPlanCellAction(ByVal Sh As Object, ByVal Target As
         GoTo SafeExit
     End If
 
-    If actionTarget.Address(False, False) = "Q2" Then
+    If actionTarget.Address(False, False) = "R2" Then
         mQuarterPlanActionRunning = True
         Application.EnableEvents = False
         ButtonExportQuarterPlanBacklog

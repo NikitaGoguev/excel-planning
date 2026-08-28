@@ -1,17 +1,17 @@
 Option Explicit
 
-Private Const QPS_TEST_SCENARIO_COUNT As Long = 52
+Private Const QPS_TEST_SCENARIO_COUNT As Long = 63
 
 Public Function RunQuarterPlanSchedulerUnitTests() As String
     Dim scenario As Long
     Dim completedScenarios As Long
     Dim tasks As Variant, resources As Variant, holidays As Variant, rules As Variant, result As Variant
-    Dim firstDate As Date, focusFactor As Double
+    Dim firstDate As Date, focusFactor As Double, designFocusFactor As Double
 
     On Error GoTo TestFailure
     For scenario = 1 To QPS_TEST_SCENARIO_COUNT
-        BuildSchedulerScenario scenario, tasks, resources, holidays, rules, firstDate, focusFactor
-        result = QuarterPlanSchedule(tasks, resources, holidays, rules, firstDate, focusFactor)
+        BuildSchedulerScenario scenario, tasks, resources, holidays, rules, firstDate, focusFactor, designFocusFactor
+        result = QuarterPlanSchedule(tasks, resources, holidays, rules, firstDate, focusFactor, designFocusFactor)
         AssertSchedulerScenario scenario, result
         completedScenarios = completedScenarios + 1
     Next scenario
@@ -21,11 +21,13 @@ TestFailure:
     RunQuarterPlanSchedulerUnitTests = "FAIL|" & CStr(scenario) & "|" & Err.Description
 End Function
 
-Private Sub BuildSchedulerScenario(ByVal scenario As Long, ByRef tasks As Variant, ByRef resources As Variant, ByRef holidays As Variant, ByRef rules As Variant, ByRef firstDate As Date, ByRef focusFactor As Double)
+Private Sub BuildSchedulerScenario(ByVal scenario As Long, ByRef tasks As Variant, ByRef resources As Variant, ByRef holidays As Variant, ByRef rules As Variant, ByRef firstDate As Date, ByRef focusFactor As Double, ByRef designFocusFactor As Double)
+    Dim rowIndex As Long
     tasks = Empty
     firstDate = DateSerial(2026, 1, 5)
     focusFactor = 1
-    ReDim tasks(1 To 2, 1 To 6)
+    designFocusFactor = 0.7
+    ReDim tasks(1 To 2, 1 To 7)
     tasks(1, 1) = True: tasks(1, 2) = "FULL"
     tasks(1, 3) = 2: tasks(1, 4) = 2: tasks(1, 5) = 2: tasks(1, 6) = 2
     resources = SchedulerTestResources()
@@ -115,11 +117,60 @@ Private Sub BuildSchedulerScenario(ByVal scenario As Long, ByRef tasks As Varian
             rules(1, 2) = 1: rules(2, 2) = 0.25: rules(3, 2) = 2: rules(4, 2) = 0.75
         Case 51: holidays = Array(DateSerial(2026, 1, 8))
         Case 52
-            ReDim tasks(1 To 3, 1 To 6)
+            ReDim tasks(1 To 3, 1 To 7)
             tasks(1, 1) = True: tasks(1, 2) = "AN": tasks(1, 3) = 2
             tasks(2, 1) = True: tasks(2, 2) = "AN": tasks(2, 3) = 2
             tasks(3, 1) = True: tasks(3, 2) = "AN": tasks(3, 3) = 1
             resources = SchedulerTestResourcesWithSecondAnalyst()
+        Case 53
+            tasks(1, 7) = 2
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
+        Case 54
+            tasks(1, 2) = "AN": tasks(1, 3) = 1: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1.4
+            designFocusFactor = 0.7
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
+        Case 55
+            tasks(1, 2) = "AN": tasks(1, 3) = 1: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1.4
+            designFocusFactor = 0.5
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
+        Case 56
+            tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
+        Case 57
+            tasks(1, 2) = "DEFER": tasks(1, 7) = 2
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
+        Case 58
+            tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1
+            designFocusFactor = 1
+        Case 59
+            tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1
+            designFocusFactor = 0
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
+        Case 60
+            tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(1, 0.5)
+            resources(5, 3) = firstDate: resources(5, 4) = DateAdd("d", 1, firstDate)
+        Case 61
+            tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 1
+            tasks(2, 1) = True: tasks(2, 2) = "FULL": tasks(2, 7) = 1
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(0.5, 1)
+        Case 62
+            tasks(1, 3) = 0: tasks(1, 4) = 0: tasks(1, 5) = 0: tasks(1, 6) = 0: tasks(1, 7) = 2
+            tasks(2, 1) = True: tasks(2, 2) = "FULL": tasks(2, 7) = 1
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(1, 1)
+            resources(5, 3) = DateAdd("d", 1, firstDate): resources(5, 4) = DateAdd("d", 1, firstDate)
+        Case 63
+            ReDim tasks(1 To 6, 1 To 7)
+            For rowIndex = 1 To 6: tasks(rowIndex, 1) = True: tasks(rowIndex, 7) = 1: Next rowIndex
+            tasks(1, 2) = "AN": tasks(2, 2) = "DEV": tasks(3, 2) = "BE": tasks(4, 2) = "FE": tasks(5, 2) = "FULL": tasks(6, 2) = "DEFER"
+            designFocusFactor = 1
+            resources = SchedulerTestResourcesWithDesigners(1, 0)
     End Select
 End Sub
 
@@ -177,6 +228,17 @@ Private Function SchedulerScenarioName(ByVal scenario As Long) As String
         Case 50: SchedulerScenarioName = "custom overlap rules"
         Case 51: SchedulerScenarioName = "QA split with holiday"
         Case 52: SchedulerScenarioName = "three tasks two analysts"
+        Case 53: SchedulerScenarioName = "DE parallel with AN and non-blocking readiness"
+        Case 54: SchedulerScenarioName = "DE focus factor 70 percent"
+        Case 55: SchedulerScenarioName = "DE focus factor override"
+        Case 56: SchedulerScenarioName = "DE without AN"
+        Case 57: SchedulerScenarioName = "deferred excludes DE schedule"
+        Case 58: SchedulerScenarioName = "missing DE resource"
+        Case 59: SchedulerScenarioName = "invalid DE focus factor"
+        Case 60: SchedulerScenarioName = "replacement designer on vacation"
+        Case 61: SchedulerScenarioName = "highest allocation designer"
+        Case 62: SchedulerScenarioName = "designer allocation tie first row"
+        Case 63: SchedulerScenarioName = "DE across every status"
     End Select
 End Function
 
@@ -196,7 +258,7 @@ Private Sub AssertSchedulerScenario(ByVal scenario As Long, ByRef result As Vari
 
     For rowIndex = 1 To expectedRows
         expected = SchedulerExpectedRow(scenario, rowIndex)
-        For colIndex = 1 To 15
+        For colIndex = 1 To 18
             AssertSchedulerValue scenario, rowIndex, colIndex, expected(colIndex), result(rowIndex, colIndex)
         Next colIndex
     Next rowIndex
@@ -204,11 +266,22 @@ End Sub
 
 Private Function SchedulerExpectedRows(ByVal scenario As Long) As Long
     If scenario = 33 Then Exit Function
-    If scenario = 52 Then SchedulerExpectedRows = 3 Else SchedulerExpectedRows = 2
+    If scenario = 52 Then SchedulerExpectedRows = 3 Else If scenario = 63 Then SchedulerExpectedRows = 6 Else SchedulerExpectedRows = 2
 End Function
 
 Private Function SchedulerExpectedRow(ByVal scenario As Long, ByVal rowIndex As Long) As Variant
-    Dim expected(1 To 15) As Variant
+    Dim expected(1 To 18) As Variant
+
+    If scenario = 63 Then
+        expected(1) = 1
+        If rowIndex <= 5 Then
+            expected(16) = 1
+            expected(17) = DateAdd("d", rowIndex - 1, DateSerial(2026, 1, 5))
+            expected(18) = expected(17)
+        End If
+        SchedulerExpectedRow = expected
+        Exit Function
+    End If
 
     If rowIndex = 2 Then
         Select Case scenario
@@ -216,6 +289,8 @@ Private Function SchedulerExpectedRow(ByVal scenario As Long, ByVal rowIndex As 
             Case 29: expected(1) = 1: expected(2) = DateSerial(2026, 1, 5): expected(3) = 1: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 5)
             Case 43: expected(1) = 1: expected(2) = DateSerial(2026, 1, 6): expected(3) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6)
             Case 52: expected(1) = 2: expected(2) = DateSerial(2026, 1, 6): expected(3) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6)
+            Case 61: expected(1) = 1: expected(16) = 2: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 6)
+            Case 62: expected(1) = 1: expected(16) = 1: expected(17) = DateSerial(2026, 1, 7): expected(18) = DateSerial(2026, 1, 7)
         End Select
         SchedulerExpectedRow = expected
         Exit Function
@@ -265,6 +340,16 @@ Private Function SchedulerExpectedRow(ByVal scenario As Long, ByVal rowIndex As 
         Case 47: SetExpectedAnalysisOnly expected, 2, 2, DateSerial(2026, 1, 5), DateSerial(2026, 1, 6)
         Case 50: expected(1) = 9: expected(2) = DateSerial(2026, 1, 8): expected(3) = 4: expected(4) = 4: expected(5) = 1: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 8): expected(9) = DateSerial(2026, 1, 5): expected(10) = DateSerial(2026, 1, 8): expected(11) = DateSerial(2026, 1, 7): expected(12) = DateSerial(2026, 1, 7)
         Case 51: expected(1) = 8: expected(2) = DateSerial(2026, 1, 14): expected(3) = 2: expected(4) = 2: expected(5) = 2: expected(6) = 2: expected(7) = DateSerial(2026, 1, 5): expected(8) = DateSerial(2026, 1, 6): expected(9) = DateSerial(2026, 1, 7): expected(10) = DateSerial(2026, 1, 9): expected(11) = DateSerial(2026, 1, 12): expected(12) = DateSerial(2026, 1, 13): expected(13) = DateSerial(2026, 1, 7): expected(14) = DateSerial(2026, 1, 14)
+        Case 53: SetExpectedFullPath expected, DateSerial(2026, 1, 13): expected(1) = 10: expected(16) = 2: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 6)
+        Case 54: SetExpectedAnalysisOnly expected, 3, 1, DateSerial(2026, 1, 5), DateSerial(2026, 1, 5): expected(16) = 2: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 6)
+        Case 55: SetExpectedAnalysisOnly expected, 4, 1, DateSerial(2026, 1, 5), DateSerial(2026, 1, 5): expected(16) = 3: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 7)
+        Case 56: expected(1) = 1: expected(16) = 1: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 5)
+        Case 57: expected(1) = 10
+        Case 58: expected(1) = 1: expected(15) = "No DE resources."
+        Case 59: expected(1) = 0: expected(15) = "Design focus factor is missing or <= 0."
+        Case 60: expected(1) = 1: expected(16) = 2: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 6)
+        Case 61: expected(1) = 1: expected(16) = 1: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 5)
+        Case 62: expected(1) = 2: expected(16) = 2: expected(17) = DateSerial(2026, 1, 5): expected(18) = DateSerial(2026, 1, 6)
     End Select
     SchedulerExpectedRow = expected
 End Function
@@ -298,7 +383,7 @@ Private Sub AssertSchedulerValue(ByVal scenario As Long, ByVal rowIndex As Long,
 End Sub
 
 Private Function SchedulerOutputIsDate(ByVal colIndex As Long) As Boolean
-    SchedulerOutputIsDate = (colIndex = 2 Or (colIndex >= 7 And colIndex <= 14))
+    SchedulerOutputIsDate = (colIndex = 2 Or (colIndex >= 7 And colIndex <= 14) Or colIndex = 17 Or colIndex = 18)
 End Function
 
 Private Function SchedulerOutputFieldName(ByVal colIndex As Long) As String
@@ -318,7 +403,22 @@ Private Function SchedulerOutputFieldName(ByVal colIndex As Long) As String
         Case 13: SchedulerOutputFieldName = "QA start"
         Case 14: SchedulerOutputFieldName = "QA finish"
         Case 15: SchedulerOutputFieldName = "diagnostic"
+        Case 16: SchedulerOutputFieldName = "DE days"
+        Case 17: SchedulerOutputFieldName = "DE start"
+        Case 18: SchedulerOutputFieldName = "DE finish"
     End Select
+End Function
+
+Private Function SchedulerTestResourcesWithDesigners(ByVal firstAllocation As Double, ByVal secondAllocation As Double) As Variant
+    Dim result() As Variant, base As Variant, rowIndex As Long, colIndex As Long, rowCount As Long
+    base = SchedulerTestResources()
+    rowCount = 5
+    If secondAllocation > 0 Then rowCount = 6
+    ReDim result(1 To rowCount, 1 To 8)
+    For rowIndex = 1 To 4: For colIndex = 1 To 8: result(rowIndex, colIndex) = base(rowIndex, colIndex): Next colIndex: Next rowIndex
+    result(5, 1) = "DE": result(5, 2) = firstAllocation
+    If secondAllocation > 0 Then result(6, 1) = "DE": result(6, 2) = secondAllocation
+    SchedulerTestResourcesWithDesigners = result
 End Function
 
 Private Function SchedulerFailurePrefix(ByVal scenario As Long) As String

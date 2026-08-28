@@ -19,7 +19,7 @@ static contracts + Excel COM acceptance
 - `src/workbook/build.mjs` оркестрирует сборку; `src/sheets/*.mjs` строят отдельные листы, а `src/workbook/design.mjs`, `validations.mjs` и `src/ooxml/*` обслуживают оформление, validation и OOXML post-processing.
 - XLSM packager добавляет сохранённый Excel VBA project целиком и выставляет OOXML code names/content types.
 - `ThisWorkbook` содержит только events и compatibility wrappers. Domain/UI-код разделён между `QuarterPlanCommon`, `QuarterPlanUi`, `QuarterPlanTeamCapacity`, `QuarterPlanTaskEstimates`, `QuarterPlanImportExport` и `QuarterPlanPlanActions`.
-- `QuarterPlanScheduler` — чистый domain engine: получает Variant matrices задач, ресурсов, праздников и правил и возвращает effort, ready date и `T:AF`, не обращаясь к Excel Object Model.
+- `QuarterPlanScheduler` — чистый domain engine: получает Variant matrices задач, ресурсов, праздников и правил и возвращает effort, ready date и `U:AJ`, не обращаясь к Excel Object Model. DE планируется параллельно AN с отдельным фокус-фактором и не входит в зависимость готовности.
 - Contracts проверяют структуру пакета, диапазоны таблиц, public macros, оформление и запрещённые VBA-паттерны.
 - Excel COM acceptance запускает пользовательские сценарии в настоящем desktop Excel.
 

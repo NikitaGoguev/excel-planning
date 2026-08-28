@@ -63,8 +63,8 @@ export function deriveWorkbookLayout(input) {
   const activePlan = { titleRow: 1, headerRow: 5, dataStartRow: 6 };
   activePlan.dataEndRow = activePlan.headerRow + limits.activePlanRows;
   activePlan.jqlActionCell = `I${activePlan.headerRow - 1}`;
-  activePlan.titleRange = `A${activePlan.titleRow}:S${activePlan.titleRow}`;
-  activePlan.tableRange = `A${activePlan.headerRow}:S${activePlan.dataEndRow}`;
+  activePlan.titleRange = `A${activePlan.titleRow}:T${activePlan.titleRow}`;
+  activePlan.tableRange = `A${activePlan.headerRow}:T${activePlan.dataEndRow}`;
 
   const greyZone = {
     titleRow: activePlan.dataEndRow + 3,
@@ -73,8 +73,8 @@ export function deriveWorkbookLayout(input) {
   greyZone.dataStartRow = greyZone.headerRow + 1;
   greyZone.dataEndRow = greyZone.headerRow + limits.greyZoneRows;
   greyZone.jqlActionCell = `I${greyZone.headerRow - 1}`;
-  greyZone.titleRange = `A${greyZone.titleRow}:S${greyZone.titleRow}`;
-  greyZone.tableRange = `A${greyZone.headerRow}:S${greyZone.dataEndRow}`;
+  greyZone.titleRange = `A${greyZone.titleRow}:T${greyZone.titleRow}`;
+  greyZone.tableRange = `A${greyZone.headerRow}:T${greyZone.dataEndRow}`;
 
   const backlog = {
     actionRow: greyZone.dataEndRow + 4,
@@ -85,8 +85,8 @@ export function deriveWorkbookLayout(input) {
   backlog.dataEndRow = backlog.headerRow + limits.taskRows;
   backlog.actionCell = `A${backlog.actionRow}`;
   backlog.jqlActionCell = `I${backlog.actionRow}`;
-  backlog.titleRange = `A${backlog.titleRow}:S${backlog.titleRow}`;
-  backlog.tableRange = `A${backlog.headerRow}:S${backlog.dataEndRow}`;
+  backlog.titleRange = `A${backlog.titleRow}:T${backlog.titleRow}`;
+  backlog.tableRange = `A${backlog.headerRow}:T${backlog.dataEndRow}`;
 
   const references = { jqlClipboardCell: "Z1" };
 

@@ -12,7 +12,7 @@ Public Const SHEET_CAPACITY As String = "02_Capacity"
 Public Const SHEET_ESTIMATES As String = "03_Оценка задач"
 Public Const SHEET_QUARTER_PLAN As String = "04_Квартальный план"
 Public Const SHEET_EXPRESS_TEMPLATE As String = "100_Шаблон экспресс оценки"
-Public Const SHEET_REFS As String = "99_Справочники"
+Public Const SHEET_REFS As String = "99_Правила планирования"
 Public Const DESIGN_FONT_NAME As String = "Calibri"
 Public Const DESIGN_FONT_SIZE As Long = 11
 Public Const QUARTER_PLAN_CELL_ACTION_SHAPE_PREFIX As String = "qpa_"
@@ -45,15 +45,16 @@ Public Const PLAN_COL_ACTION_UP As Long = 4
 Public Const PLAN_COL_ACTION_DOWN As Long = 5
 Public Const PLAN_COL_DATA_FIRST As Long = 6
 Public Const PLAN_COL_PRIORITY As Long = 6
-Public Const PLAN_COL_AN As Long = 11
-Public Const PLAN_COL_BE As Long = 12
-Public Const PLAN_COL_FE As Long = 13
-Public Const PLAN_COL_QA As Long = 14
-Public Const PLAN_COL_EFFORT As Long = 15
-Public Const PLAN_COL_READY_DATE As Long = 16
-Public Const PLAN_COL_STATUS As Long = 18
-Public Const PLAN_COL_COMMENT As Long = 19
-Public Const PLAN_COL_DATA_LAST As Long = 19
+Public Const PLAN_COL_DE As Long = 11
+Public Const PLAN_COL_AN As Long = 12
+Public Const PLAN_COL_BE As Long = 13
+Public Const PLAN_COL_FE As Long = 14
+Public Const PLAN_COL_QA As Long = 15
+Public Const PLAN_COL_EFFORT As Long = 16
+Public Const PLAN_COL_READY_DATE As Long = 17
+Public Const PLAN_COL_STATUS As Long = 19
+Public Const PLAN_COL_COMMENT As Long = 20
+Public Const PLAN_COL_DATA_LAST As Long = 20
 Public Const PLAN_STATUS_ANALYSIS_READY As String = "Готова аналитика"
 Public Const PLAN_STATUS_DEV_READY As String = "Готова разработка"
 Public Const PLAN_STATUS_BACKEND_READY As String = "Готова разработка (бэк)"
@@ -61,14 +62,15 @@ Public Const PLAN_STATUS_FRONTEND_READY As String = "Готова разрабо
 Public Const PLAN_STATUS_RELEASE_READY As String = "Готово к релизу"
 Public Const PLAN_STATUS_PROM As String = "ПРОМ"
 Public Const PLAN_STATUS_DEFERRED As String = "Отложено"
-Public Const PLAN_SHEET_COL_AN_DAYS As Long = 20
-Public Const PLAN_SHEET_COL_DIAGNOSTIC As Long = 32
-Public Const PLAN_TECH_FIRST_COL_LETTER As String = "T"
-Public Const PLAN_TECH_LAST_COL_LETTER As String = "AF"
+Public Const PLAN_SHEET_COL_DE_DAYS As Long = 21
+Public Const PLAN_SHEET_COL_AN_DAYS As Long = 22
+Public Const PLAN_SHEET_COL_DIAGNOSTIC As Long = 36
+Public Const PLAN_TECH_FIRST_COL_LETTER As String = "U"
+Public Const PLAN_TECH_LAST_COL_LETTER As String = "AJ"
 Public Const EST_SHEET_COL_ACTION_DECOMPOSE As Long = 1
 Public Const EST_SHEET_COL_ACTION_DELETE As Long = 2
-Public Const EST_SHEET_COL_ACTION_EXPRESS_EXPORT As Long = 13
 Public Const EST_SHEET_COL_ACTION_COMMENT_OPTIONS As Long = 14
+Public Const EST_SHEET_COL_ACTION_EXPRESS_EXPORT As Long = 15
 Public Const EST_SHEET_COL_TASK_ID As Long = 28
 Public Const EST_SHEET_COL_PARENT_TASK_ID As Long = 29
 Public Const EST_SHEET_COL_LEVEL As Long = 30
@@ -77,12 +79,12 @@ Public Const EST_COL_DIRECTION As Long = 2
 Public Const EST_COL_DESCRIPTION As Long = 3
 Public Const EST_COL_TICKET As Long = 4
 Public Const EST_COL_NOTE As Long = 5
-Public Const EST_COL_AN As Long = 6
-Public Const EST_COL_BE As Long = 7
-Public Const EST_COL_FE As Long = 8
-Public Const EST_COL_QA As Long = 9
-Public Const EST_COL_COMMENT As Long = 10
-Public Const EST_COL_EXPRESS_EXPORT As Long = 11
+Public Const EST_COL_DE As Long = 6
+Public Const EST_COL_AN As Long = 7
+Public Const EST_COL_BE As Long = 8
+Public Const EST_COL_FE As Long = 9
+Public Const EST_COL_QA As Long = 10
+Public Const EST_COL_COMMENT As Long = 11
 Public Const EST_COL_LAST As Long = 11
 Public Const EST_MAX_DECOMPOSITION_LEVEL As Long = 2
 Public Const TASK_DELETE_CHOICE_PROMPT As Long = 0
@@ -308,6 +310,11 @@ End Function
 
 Public Function TaskEstimateVisibleHeaders() As Variant
     TaskEstimateVisibleHeaders = Array(TaskEstimateHeaderPriority(), TaskEstimateHeaderDirection(), TaskEstimateHeaderDescription(), _
+        TaskEstimateHeaderTicket(), TaskEstimateHeaderNote(), "DE", "AN", "BE", "FE", "QA", TaskEstimateHeaderComment())
+End Function
+
+Public Function TaskEstimateLegacyVisibleHeaders() As Variant
+    TaskEstimateLegacyVisibleHeaders = Array(TaskEstimateHeaderPriority(), TaskEstimateHeaderDirection(), TaskEstimateHeaderDescription(), _
         TaskEstimateHeaderTicket(), TaskEstimateHeaderNote(), "AN", "BE", "FE", "QA", TaskEstimateHeaderComment(), TaskEstimateTextExportXlsx())
 End Function
 
@@ -501,7 +508,7 @@ Public Sub AssertTaskEstimateUnicodeTextForTest()
     Dim fileName As String
 
     headers = TaskEstimateVisibleHeaders()
-    If CStr(headers(0)) <> TaskEstimateHeaderPriority() Or CStr(headers(10)) <> TaskEstimateTextExportXlsx() Then
+    If CStr(headers(0)) <> TaskEstimateHeaderPriority() Or CStr(headers(5)) <> "DE" Or CStr(headers(10)) <> TaskEstimateHeaderComment() Then
         Err.Raise 5, "AssertTaskEstimateUnicodeTextForTest", "Task estimate header helpers are inconsistent."
     End If
     If TaskEstimateTextStatistics() <> TextFromCodes(1057, 1090, 1072, 1090, 1080, 1089, 1090, 1080, 1082, 1072) Then

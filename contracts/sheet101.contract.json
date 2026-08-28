@@ -1,11 +1,15 @@
 {
   "tables": {
     "tblTaskCommentArtifacts": "A3:A7",
-    "tblTaskCommentAdjacentTeams": "C3:C12"
+    "tblTaskCommentAdjacentTeams": "C3:C12",
+    "tblStatuses": "E3:E10",
+    "tblYesNo": "G3:G5"
   },
   "requiredCells": {
     "A1": "Списки",
     "A3": "Артефакты",
-    "C3": "Смежники"
+    "C3": "Смежники",
+    "E3": "Статусы",
+    "G3": "Да/Нет"
   }
 }

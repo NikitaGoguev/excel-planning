@@ -39,7 +39,7 @@
     "component": "QuarterPlanScheduler",
     "entrypoint": "QuarterPlanSchedule",
     "testSource": "tests/vba/QuarterPlanSchedulerTests_module.txt",
-    "scenarioCount": 52,
+    "scenarioCount": 63,
     "forbiddenPatterns": ["\\bWorkbook\\b", "\\bWorksheet\\b", "\\bRange\\b", "\\bListObject\\b", "\\bApplication\\b", "\\bThisWorkbook\\b"]
   },
   "handwrittenLimitForbiddenPatterns": [
@@ -48,7 +48,7 @@
     "\"A23:L43\"",
     "\"A13:D33\"",
     "\"C3:M103\"",
-    "\"A55:S155\"",
+    "\"A55:T155\"",
     "\"A54\"",
     "\"Импорт CSV \\(до 100\\)\""
   ],

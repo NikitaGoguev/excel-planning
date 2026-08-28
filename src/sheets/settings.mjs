@@ -40,7 +40,7 @@ export function buildSettingsSheet(context) {
     horizontalAlignment: "center",
     verticalAlignment: "center",
   };
-  settings.getRange("A13:B19").values = [
+  settings.getRange("A13:B20").values = [
     ["Роль", "Количество людей"],
     ["Тим-лид / техлид", teamCompositionCount(0)],
     ["Лид по аналитике", teamCompositionCount(1)],
@@ -48,14 +48,15 @@ export function buildSettingsSheet(context) {
     ["Разработчик бэкенд", teamCompositionCount(3)],
     ["Разработчик фронтенд", teamCompositionCount(4)],
     ["Тестировщик", teamCompositionCount(5)],
+    ["Дизайнер", teamCompositionCount(6)],
   ];
   applyHeader(settings.getRange("A13:B13"));
-  applyPlain(settings.getRange("A14:A19"));
-  applyInput(settings.getRange("B14:B19"));
-  settings.getRange("B14:B19").setNumberFormat("0");
-  addWholeValidation(settings.getRange("B14:B19"), 0, limits.teamMembers);
-  addTable(settings, "A13:B19", "tblTeamComposition");
-  settings.getRange("C13:G19").values = [
+  applyPlain(settings.getRange("A14:A20"));
+  applyInput(settings.getRange("B14:B20"));
+  settings.getRange("B14:B20").setNumberFormat("0");
+  addWholeValidation(settings.getRange("B14:B20"), 0, limits.teamMembers);
+  addTable(settings, "A13:B20", "tblTeamComposition");
+  settings.getRange("C13:G20").values = [
     ["Комментарий", null, null, null, null],
     [testData.teamComposition?.[0]?.comment ?? "", null, null, null, null],
     [testData.teamComposition?.[1]?.comment ?? "", null, null, null, null],
@@ -63,18 +64,19 @@ export function buildSettingsSheet(context) {
     [testData.teamComposition?.[3]?.comment ?? "", null, null, null, null],
     [testData.teamComposition?.[4]?.comment ?? "", null, null, null, null],
     [testData.teamComposition?.[5]?.comment ?? "", null, null, null, null],
+    [testData.teamComposition?.[6]?.comment ?? "", null, null, null, null],
   ];
-  for (let row = 13; row <= 19; row += 1) {
+  for (let row = 13; row <= 20; row += 1) {
     settings.getRange(`C${row}:G${row}`).merge();
   }
   applyHeader(settings.getRange("C13:G13"));
-  applyInput(settings.getRange("C14:G19"));
-  settings.getRange("H13:M19").format = {
+  applyInput(settings.getRange("C14:G20"));
+  settings.getRange("H13:M20").format = {
     font: fontStyle({ color: colors.text }),
     verticalAlignment: "center",
     wrapText: true,
   };
-  settings.getRange("H13").formulas = [[`=IF(SUM(B14:B19)>${limits.teamMembers},"Превышен лимит ${limits.teamMembers} сотрудников","")`]];
+  settings.getRange("H13").formulas = [[`=IF(SUM(B14:B20)>${limits.teamMembers},"Превышен лимит ${limits.teamMembers} сотрудников","")`]];
   settings.getRange("H13:M13").merge();
   settings.getRange("H13:M13").format = {
     fill: colors.input,
